@@ -1,3 +1,4 @@
+
 0. GOTO home directory
 cd C:\Programmering\GPU_Course_Assignments
 1. Copy .cu to dione:

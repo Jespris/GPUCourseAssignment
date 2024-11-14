@@ -3,83 +3,77 @@
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
+#include <algorithm>  // For std::sort
+#include <vector>     // For std::vector and std::pair
+#include <limits.h>
+#include <fstream>  // Include for file output
 
 #define BIN_RANGE 180
 #define BINS_PER_DEGREE 4
 #define THREADS_PER_BLOCK 512
+#define ARCMIN_TO_RAD 0.0029088820866
+#define RAD_TO_DEG 57.29577951
 
-__global__ void calculateAngle(float ra_A, float decl_A, float* ra_B, float* decl_B, float* angles, int N){
-	int i = blockDim.x * blockIdx.x + threadIdx.x;
-	if (i >= N) {
-		// I is larger than N, something has gone wrong
-		// TODO: print an error here somehow
+__global__ void calculateAngle(float* ra_A, float* decl_A, float* ra_B, float* decl_B, unsigned int* histogram, int N, bool differentSet){
+	float theta_deg;
+	
+	long long int r = (long long int)blockDim.x * blockIdx.x + threadIdx.x;
+	int i = r / N;  // index of A 
+	int k = r % N;  // index of B
+
+	if (i >= N || k >= N) {  // check that we're in bounds
 		return;
 	}
-	// convert angles from arc minutes to radians
-	// TODO: save this constant somewhere else ?!?
-	float arcmin_to_rad = 0.00029088820866;
-	float rad_to_deg = 57.29577951;
 
-	float alpha_A = ra_A*arcmin_to_rad;
-	float delta_A = decl_A*arcmin_to_rad; 
-	float alpha_B = ra_B[i]*arcmin_to_rad;
-	float delta_B = decl_B[i]*arcmin_to_rad;
+	if (!differentSet && i >= k){  // Only process unique pairs where i < k
+		// The pair (i, k) and (k, i) is the same and has been accounted for twice
+		return;
+	}
+	
+	if (ra_A[i] == ra_B[k] && decl_A[i] == decl_B[k]){  // We're comparing a galaxy to itself
+		// Save computing time
+		// Increment the 0 angle bin
+		atomicInc(&histogram[0], UINT_MAX);
+		return;
+	} // else:
+
+	// convert angles from arc minutes to radians
+
+	float alpha_A = ra_A[i] * ARCMIN_TO_RAD;
+	float delta_A = decl_A[i] * ARCMIN_TO_RAD; 
+	float alpha_B = ra_B[k] * ARCMIN_TO_RAD;
+	float delta_B = decl_B[k] * ARCMIN_TO_RAD;
 
 	// TODO: check that we have logical values
 
 	float dotProduct = cos(delta_A)*cos(delta_B)*cos(alpha_A-alpha_B)+sin(delta_A)*sin(delta_B);
-	float theta_rad = acos(dotProduct);
-	
-	float theta_deg = theta_rad * rad_to_deg;
+	dotProduct = fminf(1.0f, fmaxf(dotProduct, -1.0f)); // Clamp to [-1, 1]
 
-	// TODO: check that we have logical result
-	if (theta_deg < 0){
-		theta_deg = abs(theta_deg);
+	float theta_rad = acosf(dotProduct);
+	theta_deg = theta_rad * RAD_TO_DEG;
+
+	// histogram time!
+	int histogramBinIndex = floor(theta_deg * BINS_PER_DEGREE);
+	if (histogramBinIndex >= 0 && histogramBinIndex < BIN_RANGE * BINS_PER_DEGREE){ // ensure boundary
+		atomicInc(&histogram[histogramBinIndex], UINT_MAX);  // this probably slows down the execution time a lot
+		if (!differentSet){
+			// We need to increment again if the sets are the same because we're halving the comparisons
+			atomicInc(&histogram[histogramBinIndex], UINT_MAX);
+		}
 	}
-	// TODO: assert theta_deg <= 180
-	angles[i] = theta_deg;
-}
-
-__global__ void fillHistogram(float* angles, unsigned int* histogram){
-	int i = blockDim.x * blockIdx.x + threadIdx.x;
-	float angle = angles[i];
-	int histogramBinIndex = floor(angle * BINS_PER_DEGREE);
-	unsigned int *histogramAddess = &histogram[histogramBinIndex];
-	atomicInc(histogramAddess, 1000000);
 }
 
 void summarize_histogram(unsigned int* histogram){
 	long total_count = 0;
-	int max_height = 0;
-	int mode_bin = 0;
-	int non_zero_start = -1, non_zero_end = -1;
 	int NUM_BINS = BIN_RANGE * BINS_PER_DEGREE;
 
 	// Calculate total count, find max height and mode, and locate non-zero range
     for (int i = 0; i < NUM_BINS; i++) {
         total_count += histogram[i];
-        
-        if (histogram[i] > max_height) {
-            max_height = histogram[i];
-            mode_bin = i;
-        }
-        
-        if (histogram[i] > 0) {
-            if (non_zero_start == -1) non_zero_start = i;
-            non_zero_end = i;
-        }
     }
     
     // Calculate mean bin height
     double mean_height = (double)total_count / NUM_BINS;
-    
-    // Calculate variance and standard deviation
-    double variance = 0.0;
-    for (int i = 0; i < NUM_BINS; i++) {
-        variance += pow(histogram[i] - mean_height, 2);
-    }
-    variance /= NUM_BINS;
-    double stddev = sqrt(variance);
     
     // Approximate median (finding the bin where cumulative count reaches 50%)
     long cumulative_count = 0;
@@ -97,10 +91,96 @@ void summarize_histogram(unsigned int* histogram){
     printf("Total count: %ld\n", total_count);
     printf("Mean bin height: %.2f\n", mean_height);
     printf("Median bin (approx): %d\n", median_bin);
+}
+
+void verbose_histogram(unsigned int* histogram) {
+    long total_count = 0;
+    int max_height = 0;
+    int mode_bin = 0;
+    int non_zero_start = -1, non_zero_end = -1;
+    int NUM_BINS = BIN_RANGE * BINS_PER_DEGREE;
+
+    // Calculate total count, find max height and mode, and locate non-zero range
+    for (int i = 0; i < NUM_BINS; i++) {
+        total_count += histogram[i];
+        
+        if (histogram[i] > max_height) {
+            max_height = histogram[i];
+            mode_bin = i;
+        }
+        
+        if (histogram[i] > 0) {
+            if (non_zero_start == -1) non_zero_start = i;
+            non_zero_end = i;
+        }
+    }
+    
+    // Mean and standard deviation
+    double mean_height = (double)total_count / NUM_BINS;
+    double variance = 0.0;
+    for (int i = 0; i < NUM_BINS; i++) {
+        variance += pow(histogram[i] - mean_height, 2);
+    }
+    variance /= NUM_BINS;
+    double stddev = sqrt(variance);
+
+    // Prepare vector of (bin index, count) pairs for sorting
+    std::vector<std::pair<int, unsigned int>> bin_counts;
+    for (int i = 0; i < NUM_BINS; i++) {
+        bin_counts.push_back(std::make_pair(i, histogram[i]));
+    }
+
+    // Sort by count in descending order for top 3, ascending for bottom 3
+    std::sort(bin_counts.begin(), bin_counts.end(), [](const auto &a, const auto &b) { return a.second > b.second; });
+
+    // Top 3 bins with the most entries
+    printf("\nTop 3 most populated bins:\n");
+    for (int j = 0; j < 3 && j < bin_counts.size(); j++) {
+        int bin_idx = bin_counts[j].first;
+        unsigned int count = bin_counts[j].second;
+        float angle = (float)bin_idx / BINS_PER_DEGREE;  // Convert bin index to angle in degrees
+        printf("Bin %d (Angle ≈ %.2f°): Count = %d\n", bin_idx, angle, count);
+    }
+
+    // Sort by ascending order to find bottom 3 non-zero populated bins
+    std::sort(bin_counts.begin(), bin_counts.end(), [](const auto &a, const auto &b) { return a.second < b.second; });
+
+    // Bottom 3 bins with the least entries (excluding zero counts)
+    printf("\nBottom 3 least populated bins (non-zero):\n");
+    int count_bottom = 0;
+    for (const auto& bin : bin_counts) {
+        if (bin.second > 0) {  // Exclude zero entries
+            int bin_idx = bin.first;
+            unsigned int count = bin.second;
+            float angle = (float)bin_idx / BINS_PER_DEGREE;  // Convert bin index to angle in degrees
+            printf("Bin %d (Angle ≈ %.2f°): Count = %d\n", bin_idx, angle, count);
+            count_bottom++;
+            if (count_bottom >= 3) break;  // Only get bottom 3
+        }
+    }
+
+    // Output summary
+    printf("\nHistogram Summary:\n");
+    printf("Total count: %ld\n", total_count);
+    printf("Mean bin height: %.2f\n", mean_height);
     printf("Mode bin: %d with height %d\n", mode_bin, max_height);
     printf("Standard deviation of bin heights: %.2f\n", stddev);
     printf("Non-zero bin range: %d to %d\n", non_zero_start, non_zero_end);
 }
+
+void save_histogram_to_file(const unsigned int* histogram, int num_bins, const char* filename) {
+    std::ofstream outfile(filename);
+    if (!outfile.is_open()) {
+        printf("Error opening file %s for writing.\n", filename);
+        return;
+    }
+    for (int i = 0; i < num_bins; i++) {
+        outfile << i << " " << histogram[i] << "\n";
+    }
+    outfile.close();
+    printf("Histogram saved to %s\n", filename);
+}
+
 
 // data for the real galaxies will be read into these arrays
 float *h_raReal, *h_declReal;
@@ -117,18 +197,14 @@ unsigned int *d_histogram;
 
 int main(int argc, char *argv[])
 {
-	int i;
-	int nrBlocks;
 	printf("==================== READING INPUT DATA =====================\n");
 	int readdata(char *argv1, char *argv2);
 	printf("==================== READING DEVICE DATA ====================\n");
 	int getDevice(int deviceNr);
-	long int histogramDRsum, histogramDDsum, histogramRRsum;
-	double w;
-	double start, end, kerneltime;
+	// long int histogramDRsum, histogramDDsum, histogramRRsum;
 	// struct timeval _ttime;
 	// struct timezone _tzone;
-	cudaError_t myError;
+	// cudaError_t myError;
 
 	FILE *outfil;
 
@@ -143,92 +219,103 @@ int main(int argc, char *argv[])
 	if (getDevice(0) != 0)
 		return (-1);
 
-	// TODO: SOMEHOW WE AREN*T GOING PAST THIS?!?!?!?
 	if (readdata(argv[1], argv[2]) != 0)
 		return (-1);
 
-	// TODO: make sure input array sizes are the same
-	// allocate memory on the GPU
+	// make sure input array sizes are the same
+	
 	int N = nrReal;
 	if (N != nrFake){
 		printf("Input data lengths are not the same!");
 		return (-1);
 	}
 
+	clock_t start, end;
+	double time_used;
+	start = clock();
+
+	long long totalPairs = (long long)N*N;
+
+	// allocate memory on the GPU and histogram arrays memory on CPU
 	size_t arraybytes = N * sizeof(float);
+	printf("Arraybytes: %d\n", arraybytes);
+
 	size_t histogrambytes = BIN_RANGE * BINS_PER_DEGREE * sizeof(unsigned int);
-	unsigned int* h_histogram = (unsigned int*)malloc(histogrambytes);
-	unsigned int* d_histogram; cudaMalloc(&d_histogram, histogrambytes);
+	unsigned int* h_histogramDR = (unsigned int*)malloc(histogrambytes);
+	unsigned int* h_histogramDD = (unsigned int*)malloc(histogrambytes);
+	unsigned int* h_histogramRR = (unsigned int*)malloc(histogrambytes);
+	
+	unsigned int *d_histogramDR, *d_histogramDD, *d_histogramRR;
+	cudaMalloc(&d_histogramDR, histogrambytes);
+	cudaMalloc(&d_histogramDD, histogrambytes);
+	cudaMalloc(&d_histogramRR, histogrambytes);
 
-	// DR histogram implementation
-	for (int i=0; i<N; i++){
-		clock_t start, end;
-		double time_used;
-		printf("Calculating angles for galaxy %d...\n", i);
-		start = clock();
-		// TODO: do we need to malloc the h_raReal, h_declReal... ?
-		float* h_results = (float*)malloc(arraybytes);
+	// allocate to GPU: the real and fake right ascension and declination
+	float* d_raReal; cudaMalloc(&d_raReal, arraybytes);
+	float* d_declReal; cudaMalloc(&d_declReal, arraybytes);
+	float* d_raFake; cudaMalloc(&d_raFake, arraybytes);
+	float* d_declFake; cudaMalloc(&d_declFake, arraybytes);
 
-		// allocate to GPU: the real and fake right ascension and declination, aswell as a result array
+	// copy data to the GPU
+	cudaMemcpy(d_raFake, h_raFake, arraybytes, cudaMemcpyHostToDevice);
+	cudaMemcpy(d_declFake, h_declFake, arraybytes, cudaMemcpyHostToDevice);
 
-		float d_raReal = h_raReal[i];
-		float d_declReal = h_declReal[i];
-		
-		float* d_raFake; cudaMalloc(&d_raFake, arraybytes);
-		float* d_declFake; cudaMalloc(&d_declFake, arraybytes);
-		float* d_results; cudaMalloc(&d_results, arraybytes);
+	// Size of thread blocks
+	int blocksInGrid = (totalPairs + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+	printf("Blocks in grid: %d\n", blocksInGrid);
 
-		// copy data to the GPU
-		cudaMemcpy(d_raFake, h_raFake, arraybytes, cudaMemcpyHostToDevice);
-		cudaMemcpy(d_declFake, h_declFake, arraybytes, cudaMemcpyHostToDevice);
+	// run the kernels on the GPU
+	// THIS CALCULATES DR
+	// 1. Calculate Real vs. Fake (DR histogram) - already implemented
+    printf("================= CALCULATING DR ANGLES =====================\n");
+    calculateAngle<<<blocksInGrid, THREADS_PER_BLOCK>>>(d_raReal, d_declReal, d_raFake, d_declFake, d_histogramDR, N, true);
+    cudaMemcpy(h_histogramDR, d_histogramDR, histogrambytes, cudaMemcpyDeviceToHost);
 
-		// Size of thread blocks
-		int blocksInGrid = (N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+    // 2. Calculate Real vs. Real (DD histogram)
+    printf("================= CALCULATING DD ANGLES =====================\n");
+    calculateAngle<<<blocksInGrid, THREADS_PER_BLOCK>>>(d_raReal, d_declReal, d_raReal, d_declReal, d_histogramDD, N, false);
+    cudaMemcpy(h_histogramDD, d_histogramDD, histogrambytes, cudaMemcpyDeviceToHost);
 
-		// run the kernels on the GPU
-		// THIS CALCULATES DR
-		printf("Calculating angles between real and fake...\n");
-		calculateAngle<<<blocksInGrid, THREADS_PER_BLOCK>>>(d_raReal, d_declReal, d_raFake, d_declFake, d_results, N);
-		
-		// copy the results back to the CPU
-		cudaMemcpy(h_results, d_results, arraybytes, cudaMemcpyDeviceToHost);
-		printf("DONE!\n");
-		
-		// Free memory
-		cudaFree(d_declFake); cudaFree(d_raFake); cudaFree(d_results);
-		
-		// print some result values as testing
-		printf("Result value of index 0 = %.2f\n", h_results[0]);
-		printf("Result value of index 1 = %.2f\n", h_results[1]);
-		printf("Result value of index 2 = %.2f\n", h_results[2]);
-		printf("Result value of index 3 = %.2f\n", h_results[3]);
-		printf("Result value of index %d = %.2f\n", N - 1, h_results[N - 1]);
+    // 3. Calculate Fake vs. Fake (RR histogram)
+    printf("================= CALCULATING RR ANGLES =====================\n");
+    calculateAngle<<<blocksInGrid, THREADS_PER_BLOCK>>>(d_raFake, d_declFake, d_raFake, d_declFake, d_histogramRR, N, false);
+    cudaMemcpy(h_histogramRR, d_histogramRR, histogrambytes, cudaMemcpyDeviceToHost);
+	
+	printf("DONE!\n");
+	
+	// Free memory
+	cudaFree(d_declReal); cudaFree(d_raReal); 
+	cudaFree(d_declFake); cudaFree(d_raFake);
+	cudaFree(d_histogramDR); cudaFree(d_histogramDD); cudaFree(d_histogramRR);
 
-		// Fill histogram
-		float* d_angles; cudaMalloc(&d_angles, arraybytes);
-		cudaMemcpy(d_angles, h_results, arraybytes, cudaMemcpyHostToDevice);
-		cudaMemcpy(d_histogram, h_histogram, histogrambytes, cudaMemcpyHostToDevice);
-		// Use same blocksInGrid, THREADS_PER_BLOCK
-		printf("Incementing bins in histogram...\n");
-		fillHistogram<<<blocksInGrid, THREADS_PER_BLOCK>>>(d_angles, d_histogram);
-		// Copy results
-		cudaMemcpy(h_histogram, d_histogram, histogrambytes, cudaMemcpyDeviceToHost);
-		printf("DONE!");
-		// Free memory
-		cudaFree(d_angles); cudaFree(d_histogram);
-		free(h_results);
-
-		end = clock();
-		time_used = ((double) (end - start)) / CLOCKS_PER_SEC * 1000.0;
-		printf("Execution time: %.2f ms\n", time_used);
-	}
+	end = clock();
+	time_used = ((double) (end - start)) / CLOCKS_PER_SEC * 1000.0;
+	printf("Execution time: %.2f ms\n", time_used);
+	
 
 	printf("=================== SUMMARIZING HISTOGRAM ===================\n");
+	printf("Summary for Real vs. Fake (DR):\n");
+    verbose_histogram(h_histogramDR);
 
-	summarize_histogram(h_histogram);
+    printf("Summary for Real vs. Real (DD):\n");
+    verbose_histogram(h_histogramDD);
+
+    printf("Summary for Fake vs. Fake (RR):\n");
+    verbose_histogram(h_histogramRR);
+
+    // Free host memory
+    free(h_histogramDR); free(h_histogramDD); free(h_histogramRR);
 	
 	// calculate omega values on the CPU, can of course be done on the GPU
 
+	printf("===================== SAVING HISTOGRAMS =====================\n");
+	// After each call to `verbose_histogram`, save the histogram to a file
+	save_histogram_to_file(h_histogramDR, BIN_RANGE * BINS_PER_DEGREE, "histogramDR.txt");
+	save_histogram_to_file(h_histogramDD, BIN_RANGE * BINS_PER_DEGREE, "histogramDD.txt");
+	save_histogram_to_file(h_histogramRR, BIN_RANGE * BINS_PER_DEGREE, "histogramRR.txt");
+
+
+	printf("======================= DONE, GOODBYE! ======================\n");
 	return (0);
 }
 
@@ -236,7 +323,7 @@ int readdata(char *argv1, char *argv2)
 {
 	int i, linecount;
 	char inbuf[180];
-	double ra, dec, phi, theta, dpi;
+	double ra, dec; // phi, theta, dpi;
 	FILE *infil;
 
 	printf("   Assuming input data is given in arc minutes!\n");
@@ -244,7 +331,7 @@ int readdata(char *argv1, char *argv2)
 	// phi   = ra/60.0 * dpi/180.0;
 	// theta = (90.0-dec/60.0)*dpi/180.0;
 
-	dpi = acos(-1.0);
+	// dpi = acos(-1.0);
 	infil = fopen(argv1, "r");
 	if (infil == NULL)
 	{
