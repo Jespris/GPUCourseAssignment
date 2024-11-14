@@ -29,13 +29,6 @@ __global__ void calculateAngle(float* ra_A, float* decl_A, float* ra_B, float* d
 		// The pair (i, k) and (k, i) is the same and has been accounted for twice
 		return;
 	}
-	
-	if (ra_A[i] == ra_B[k] && decl_A[i] == decl_B[k]){  // We're comparing a galaxy to itself
-		// Save computing time
-		// Increment the 0 angle bin
-		atomicInc(&histogram[0], UINT_MAX);
-		return;
-	} // else:
 
 	// convert angles from arc minutes to radians
 
@@ -275,11 +268,13 @@ int main(int argc, char *argv[])
     printf("================= CALCULATING DD ANGLES =====================\n");
     calculateAngle<<<blocksInGrid, THREADS_PER_BLOCK>>>(d_raReal, d_declReal, d_raReal, d_declReal, d_histogramDD, N, false);
     cudaMemcpy(h_histogramDD, d_histogramDD, histogrambytes, cudaMemcpyDeviceToHost);
+	h_histogramDD[0] += N;  // N galaxies has 0 angle with itself, so add N to the first bin
 
     // 3. Calculate Fake vs. Fake (RR histogram)
     printf("================= CALCULATING RR ANGLES =====================\n");
     calculateAngle<<<blocksInGrid, THREADS_PER_BLOCK>>>(d_raFake, d_declFake, d_raFake, d_declFake, d_histogramRR, N, false);
     cudaMemcpy(h_histogramRR, d_histogramRR, histogrambytes, cudaMemcpyDeviceToHost);
+	h_histogramRR[0] += N;
 	
 	printf("DONE!\n");
 	
