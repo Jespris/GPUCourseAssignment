@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 
 # Constants for bin grouping
 BINS_PER_DEGREE = 4  # 4 bins per degree
@@ -38,7 +39,7 @@ def plot_individual_histogram(file_path, output_image):
     plt.yscale('log')
     plt.xlabel("Angle (degrees)")
     plt.ylabel("Count (log scale)")
-    plt.title(f"Histogram for {output_image}")
+    plt.title(f"Histogram for {os.path.basename(output_image)}")
     plt.grid(True, which="both", ls="--", lw=0.5)
 
     # Save the individual plot as an image
@@ -47,7 +48,7 @@ def plot_individual_histogram(file_path, output_image):
     print(f"Saved individual plot to {output_image}")
 
 
-def plot_combined_histogram(histogram_files):
+def plot_combined_histogram(histogram_files, output_dir):
     """
     Plots all histograms on the same graph with the specified angle aggregation and formatting.
     """
@@ -71,18 +72,21 @@ def plot_combined_histogram(histogram_files):
     plt.grid(True, which="both", ls="--", lw=0.5)  # More support lines
     plt.legend()  # Add legend to identify each histogram
 
-    # Save the combined plot
-    plt.savefig("combined_histogram.png")
+    combined_path = os.path.join(output_dir, "combined_histogram.png")
+    plt.savefig(combined_path)
     plt.close()
-    print("Saved combined histogram plot as combined_histogram.png")
+    print(f"Saved combined histogram plot as {combined_path}")
 
 
 if __name__ == "__main__":
+    output_dir = "histograms"
+    os.makedirs(output_dir, exist_ok=True)
+
     # Dictionary of histogram file names and output images
     histogram_files = {
-        "DR": ("histogramDR.txt", "histogramDR.png"),
-        "DD": ("histogramDD.txt", "histogramDD.png"),
-        "RR": ("histogramRR.txt", "histogramRR.png")
+        "DR": ("output/histogramDR.txt", f"{output_dir}/histogramDR.png"),
+        "DD": ("output/histogramDD.txt", f"{output_dir}/histogramDD.png"),
+        "RR": ("output/histogramRR.txt", f"{output_dir}/histogramRR.png")
     }
 
     # Plot each histogram individually
@@ -90,4 +94,4 @@ if __name__ == "__main__":
         plot_individual_histogram(file_path, output_image)
 
     # Plot all histograms together in a combined plot
-    plot_combined_histogram(histogram_files)
+    plot_combined_histogram(histogram_files, output_dir)
