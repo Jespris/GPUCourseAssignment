@@ -3,7 +3,12 @@ $remoteUser = "jespande"
 $remoteHost = "dione.utu.fi"
 $localOutputDir = "./output"
 $remoteFiles = @("err.txt", "out.txt", "omega.out", "histogramDD.txt", "histogramDR.txt", "histogramRR.txt")
-$password = "qwert"  # Replace with your password
+
+# Prompt for password securely
+Write-Output "Enter your password:"
+$passwordSecure = Read-Host -AsSecureString
+$password = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($passwordSecure))
+
 
 # 1. Copy galaxyCalculation.cu to the remote cluster
 Write-Output "Copying galaxyCalculation.cu to the remote cluster..."
@@ -22,4 +27,13 @@ foreach ($file in $remoteFiles) {
 }
 
 Write-Output "All files copied successfully to $localOutputDir."
-Write-Output "DONE!"
+
+# 4. Ensure required Python packages are installed
+Write-Output "Ensuring required Python packages are installed..."
+python -m pip install --user matplotlib numpy
+
+# 5. Run the Python script viewHistograms.py
+Write-Output "Running viewHistograms.py..."
+python viewHistograms.py
+
+Write-Output "Python script executed successfully."

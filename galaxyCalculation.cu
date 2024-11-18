@@ -14,19 +14,14 @@
 #define ARCMIN_TO_RAD 0.0029088820866
 #define RAD_TO_DEG 57.29577951
 
-__global__ void calculateAngle(float* ra_A, float* decl_A, float* ra_B, float* decl_B, unsigned int* histogram, int N, bool differentSet){
+__global__ void calculateAngle(float* ra_A, float* decl_A, float* ra_B, float* decl_B, unsigned int* histogram, int N){
 	float theta_deg;
 	
-	long long int r = (long long int)blockDim.x * blockIdx.x + threadIdx.x;
+	long long int r = (long long int)(blockDim.x * blockIdx.x + threadIdx.x);
 	int i = r / N;  // index of A 
 	int k = r % N;  // index of B
 
-	if (i >= N || k >= N) {  // check that we're in bounds
-		return;
-	}
-
-	if (!differentSet && i >= k){  // Only process unique pairs where i < k
-		// The pair (i, k) and (k, i) is the same and has been accounted for twice
+	if (i > N || k > N) {  // check that we're in bounds
 		return;
 	}
 
@@ -46,13 +41,10 @@ __global__ void calculateAngle(float* ra_A, float* decl_A, float* ra_B, float* d
 	theta_deg = theta_rad * RAD_TO_DEG;
 
 	// histogram time!
-	int histogramBinIndex = floor(theta_deg * BINS_PER_DEGREE);
+	int histogramBinIndex = floor(theta_deg * BINS_PER_DEGREE); // Get the index by multiplying the angle by bins per degree
+
 	if (histogramBinIndex >= 0 && histogramBinIndex < BIN_RANGE * BINS_PER_DEGREE){ // ensure boundary
 		atomicInc(&histogram[histogramBinIndex], UINT_MAX);  // this probably slows down the execution time a lot
-		if (!differentSet){
-			// We need to increment again if the sets are the same because we're halving the comparisons
-			atomicInc(&histogram[histogramBinIndex], UINT_MAX);
-		}
 	}
 }
 
@@ -123,6 +115,11 @@ void verbose_histogram(unsigned int* histogram) {
         bin_counts.push_back(std::make_pair(i, histogram[i]));
     }
 
+	printf("\nThe first five bins: \n");
+	for (int i=0; i<5; i++){
+		printf("Bin [%d] count: 	 %d\n", i, histogram[i]);
+	}
+
     // Sort by count in descending order for top 3, ascending for bottom 3
     std::sort(bin_counts.begin(), bin_counts.end(), [](const auto &a, const auto &b) { return a.second > b.second; });
 
@@ -151,6 +148,8 @@ void verbose_histogram(unsigned int* histogram) {
             if (count_bottom >= 3) break;  // Only get bottom 3
         }
     }
+
+	
 
     // Output summary
     printf("\nHistogram Summary:\n");
@@ -250,31 +249,31 @@ int main(int argc, char *argv[])
 	float* d_declFake; cudaMalloc(&d_declFake, arraybytes);
 
 	// copy data to the GPU
+	cudaMemcpy(d_raReal, h_raReal, arraybytes, cudaMemcpyHostToDevice);
+	cudaMemcpy(d_declReal, h_declReal, arraybytes, cudaMemcpyHostToDevice);
 	cudaMemcpy(d_raFake, h_raFake, arraybytes, cudaMemcpyHostToDevice);
 	cudaMemcpy(d_declFake, h_declFake, arraybytes, cudaMemcpyHostToDevice);
 
 	// Size of thread blocks
-	int blocksInGrid = (totalPairs + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+	long long int blocksInGrid = (totalPairs + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
 	printf("Blocks in grid: %d\n", blocksInGrid);
 
 	// run the kernels on the GPU
 	// THIS CALCULATES DR
 	// 1. Calculate Real vs. Fake (DR histogram) - already implemented
     printf("================= CALCULATING DR ANGLES =====================\n");
-    calculateAngle<<<blocksInGrid, THREADS_PER_BLOCK>>>(d_raReal, d_declReal, d_raFake, d_declFake, d_histogramDR, N, true);
+    calculateAngle<<<blocksInGrid, THREADS_PER_BLOCK>>>(d_raReal, d_declReal, d_raFake, d_declFake, d_histogramDR, N);
     cudaMemcpy(h_histogramDR, d_histogramDR, histogrambytes, cudaMemcpyDeviceToHost);
 
     // 2. Calculate Real vs. Real (DD histogram)
     printf("================= CALCULATING DD ANGLES =====================\n");
-    calculateAngle<<<blocksInGrid, THREADS_PER_BLOCK>>>(d_raReal, d_declReal, d_raReal, d_declReal, d_histogramDD, N, false);
+    calculateAngle<<<blocksInGrid, THREADS_PER_BLOCK>>>(d_raReal, d_declReal, d_raReal, d_declReal, d_histogramDD, N);
     cudaMemcpy(h_histogramDD, d_histogramDD, histogrambytes, cudaMemcpyDeviceToHost);
-	h_histogramDD[0] += N;  // N galaxies has 0 angle with itself, so add N to the first bin
 
     // 3. Calculate Fake vs. Fake (RR histogram)
     printf("================= CALCULATING RR ANGLES =====================\n");
-    calculateAngle<<<blocksInGrid, THREADS_PER_BLOCK>>>(d_raFake, d_declFake, d_raFake, d_declFake, d_histogramRR, N, false);
+    calculateAngle<<<blocksInGrid, THREADS_PER_BLOCK>>>(d_raFake, d_declFake, d_raFake, d_declFake, d_histogramRR, N);
     cudaMemcpy(h_histogramRR, d_histogramRR, histogrambytes, cudaMemcpyDeviceToHost);
-	h_histogramRR[0] += N;
 	
 	printf("DONE!\n");
 	
@@ -287,21 +286,21 @@ int main(int argc, char *argv[])
 	time_used = ((double) (end - start)) / CLOCKS_PER_SEC * 1000.0;
 	printf("Execution time: %.2f ms\n", time_used);
 	
-
-	printf("=================== SUMMARIZING HISTOGRAM ===================\n");
+	printf("\n");
+	printf("================== SUMMARIZING HISTOGRAMS ===================\n");
 	printf("Summary for Real vs. Fake (DR):\n");
     verbose_histogram(h_histogramDR);
-
+	printf("\n");
     printf("Summary for Real vs. Real (DD):\n");
     verbose_histogram(h_histogramDD);
-
+	printf("\n");
     printf("Summary for Fake vs. Fake (RR):\n");
     verbose_histogram(h_histogramRR);
-
+	printf("\n");
     // Free host memory
     free(h_histogramDR); free(h_histogramDD); free(h_histogramRR);
 	
-	// calculate omega values on the CPU, can of course be done on the GPU
+	// TODO: calculate omega values on the CPU, can of course be done on the GPU
 
 	printf("===================== SAVING HISTOGRAMS =====================\n");
 	// After each call to `verbose_histogram`, save the histogram to a file
