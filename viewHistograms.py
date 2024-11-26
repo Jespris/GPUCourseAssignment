@@ -5,7 +5,7 @@ import os
 
 # Constants for bin grouping
 BINS_PER_DEGREE = 4  # 4 bins per degree
-DEGREE_AGGREGATION = 2  # Aggregate over 2 degrees
+DEGREE_AGGREGATION = 1  # Aggregate over 2 degrees
 BINS_PER_AGGREGATED_DEGREE = BINS_PER_DEGREE * DEGREE_AGGREGATION  # Total bins per 2 degrees
 ANGLE_RANGE = 180  # Total angle range in degrees
 
@@ -23,8 +23,9 @@ def aggregate_histogram(data, bins_per_aggregated_degree):
 
     # Generate angle ranges for the aggregated bins (e.g., 0, 2, 4, ...)
     angles = np.arange(0, ANGLE_RANGE, DEGREE_AGGREGATION)
+    angles = np.arange(0, ANGLE_RANGE*BINS_PER_DEGREE)
 
-    return np.array(angles), np.array(aggregated_counts)
+    return np.array(angles), np.array(bin_counts)
 
 
 def plot_individual_histogram(file_path, output_image):
@@ -47,6 +48,23 @@ def plot_individual_histogram(file_path, output_image):
     plt.savefig(output_image)
     plt.close()
     print(f"Saved individual plot to {output_image}")
+
+
+def plot_omega(file_path, output_image):
+    data = np.loadtxt(file_path, delimiter=' ')
+    omega_values = np.array(data[:, 0])
+    omega_counts = np.array(data[:, 1])
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(omega_values, omega_counts, color='red')
+    plt.xlabel("Bin index")
+    plt.ylabel("Omega")
+    plt.title(f"Omega gram")
+    plt.grid(True)
+
+    plt.savefig(output_image)
+    plt.close()
+    print(f"Saved omega gram to {output_image}")
 
 
 def plot_combined_histogram(histogram_files, output_dir):
@@ -96,3 +114,5 @@ if __name__ == "__main__":
 
     # Plot all histograms together in a combined plot
     plot_combined_histogram(histogram_files, output_dir)
+
+    plot_omega("output/omega.txt", f"{output_dir}/omegaGram.png")

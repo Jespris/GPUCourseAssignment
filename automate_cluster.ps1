@@ -2,7 +2,7 @@
 $remoteUser = "jespande"
 $remoteHost = "dione.utu.fi"
 $localOutputDir = "./output"
-$remoteFiles = @("err.txt", "out.txt", "omega.out", "histogramDD.txt", "histogramDR.txt", "histogramRR.txt")
+$remoteFiles = @("err.txt", "out.txt", "omega.txt", "histogramDD.txt", "histogramDR.txt", "histogramRR.txt")
 
 # Prompt for password securely
 Write-Output "Enter your password:"
