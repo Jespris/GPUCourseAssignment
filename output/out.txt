@@ -73,4 +73,104 @@
          concurrentKernels             =        yes
          deviceOverlap                 =          1
             Concurrently copy memory/execute kernel
-   Using CUDA device
+   Using CUDA device 0
+
+   Assuming input data is given in arc minutes!
+   data_100k_arcmin.dat contains 100000 galaxies
+   flat_100k_arcmin.dat contains 100000 galaxies
+N = 100000
+Arraybytes: 400000
+Blocks in grid: 19531250
+================= CALCULATING DR ANGLES =====================
+================= CALCULATING DD ANGLES =====================
+================= CALCULATING RR ANGLES =====================
+DONE!
+Execution time: 8510.00 ms
+
+================== SUMMARIZING HISTOGRAMS ===================
+Summary for Real vs. Fake (DR):
+
+The first five bins: 
+Bin [0] count: 	 162262
+Bin [1] count: 	 411229
+Bin [2] count: 	 654821
+Bin [3] count: 	 859075
+Bin [4] count: 	 1061250
+
+Top 3 most populated bins:
+Bin 360 (Angle ≈ 90.00°): Count = 19473026
+Bin 358 (Angle ≈ 89.50°): Count = 19464062
+Bin 359 (Angle ≈ 89.75°): Count = 19462578
+
+Bottom 3 least populated bins (non-zero):
+Bin 719 (Angle ≈ 179.75°): Count = 147687
+Bin 0 (Angle ≈ 0.00°): Count = 162262
+Bin 718 (Angle ≈ 179.50°): Count = 395733
+
+Histogram Summary:
+Total count: 9999999543
+Mean bin height: 13888888.25
+Mode bin: 360 with height 19473026
+Standard deviation of bin heights: 5267151.42
+Non-zero bin range: 0 to 719
+
+Summary for Real vs. Real (DD):
+
+The first five bins: 
+Bin [0] count: 	 253225
+Bin [1] count: 	 400246
+Bin [2] count: 	 630269
+Bin [3] count: 	 828489
+Bin [4] count: 	 1033820
+
+Top 3 most populated bins:
+Bin 361 (Angle ≈ 90.25°): Count = 19470275
+Bin 362 (Angle ≈ 90.50°): Count = 19468744
+Bin 360 (Angle ≈ 90.00°): Count = 19450016
+
+Bottom 3 least populated bins (non-zero):
+Bin 719 (Angle ≈ 179.75°): Count = 151819
+Bin 0 (Angle ≈ 0.00°): Count = 253225
+Bin 1 (Angle ≈ 0.25°): Count = 400246
+
+Histogram Summary:
+Total count: 9999999419
+Mean bin height: 13888888.08
+Mode bin: 361 with height 19470275
+Standard deviation of bin heights: 5279446.81
+Non-zero bin range: 0 to 719
+
+Summary for Fake vs. Fake (RR):
+
+The first five bins: 
+Bin [0] count: 	 1109247
+Bin [1] count: 	 2590808
+Bin [2] count: 	 3928525
+Bin [3] count: 	 5163483
+Bin [4] count: 	 6313496
+
+Top 3 most populated bins:
+Bin 121 (Angle ≈ 30.25°): Count = 42526339
+Bin 122 (Angle ≈ 30.50°): Count = 42525268
+Bin 120 (Angle ≈ 30.00°): Count = 42512337
+
+Bottom 3 least populated bins (non-zero):
+Bin 359 (Angle ≈ 89.75°): Count = 124393
+Bin 358 (Angle ≈ 89.50°): Count = 368268
+Bin 357 (Angle ≈ 89.25°): Count = 605283
+
+Histogram Summary:
+Total count: 10000000000
+Mean bin height: 13888888.89
+Mode bin: 121 with height 42526339
+Standard deviation of bin heights: 16593986.27
+Non-zero bin range: 0 to 359
+
+===================== CALCULATING OMEGA =====================
+=================== SAVING OMEGA VALUES =====================
+Omega values saved to omega.txt
+===================== SAVING HISTOGRAMS =====================
+Histogram saved to histogramDR.txt
+Histogram saved to histogramDD.txt
+Histogram saved to histogramRR.txt
+======================= DONE, GOODBYE! ======================
