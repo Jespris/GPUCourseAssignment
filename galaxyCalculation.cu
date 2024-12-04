@@ -11,27 +11,45 @@
 
 #define BIN_RANGE 180
 #define BINS_PER_DEGREE 4
-#define THREADS_PER_BLOCK 256
+#define THREADS_PER_BLOCK 512
 #define ARCMIN_TO_RAD 0.0029088820866
 #define RAD_TO_DEG 57.29577951
 
-__global__ void calculateAngle(float* ra_A, float* decl_A, float* ra_B, float* decl_B, int* histogram, int N){
+__global__ void calculateAngle(float* ra_D, float* decl_D, float* ra_R, float* decl_R, int* histogram_DR, int* histogram_DD, int* histogram_RR, int N){
 	float theta_deg;
 	
-	long long int r = (long long int)(blockDim.x * blockIdx.x + threadIdx.x);
-	int i = r / N;  // index of A 
-	int k = r % N;  // index of B
+	long long int index = (long long int)(blockDim.x * blockIdx.x + threadIdx.x);
+	long int sector = index % (N*N);
+	int h = index / (N*N);  // DR = 1, DD = 2, or RR = 3
+	int i = sector / N;  // index of A 
+	int k = sector % N;  // index of B
 
 	if (i > N || k > N) {  // check that we're in bounds
 		return;
 	}
-
+	
 	// convert angles from arc minutes to radians
+	float alpha_A, delta_A, alpha_B, delta_B;
 
-	float alpha_A = ra_A[i] * ARCMIN_TO_RAD;
-	float delta_A = decl_A[i] * ARCMIN_TO_RAD; 
-	float alpha_B = ra_B[k] * ARCMIN_TO_RAD;
-	float delta_B = decl_B[k] * ARCMIN_TO_RAD;
+	if (h == 1){
+		// DR
+		alpha_A = ra_D[i] * ARCMIN_TO_RAD;
+		delta_A = decl_D[i] * ARCMIN_TO_RAD; 
+		alpha_B = ra_R[k] * ARCMIN_TO_RAD;
+		delta_B = decl_R[k] * ARCMIN_TO_RAD;
+	} else if (h == 2){
+		// DD
+		alpha_A = ra_D[i] * ARCMIN_TO_RAD;
+		delta_A = decl_D[i] * ARCMIN_TO_RAD; 
+		alpha_B = ra_D[k] * ARCMIN_TO_RAD;
+		delta_B = decl_D[k] * ARCMIN_TO_RAD;
+	} else {
+		// RR
+		alpha_A = ra_R[i] * ARCMIN_TO_RAD;
+		delta_A = decl_R[i] * ARCMIN_TO_RAD; 
+		alpha_B = ra_R[k] * ARCMIN_TO_RAD;
+		delta_B = decl_R[k] * ARCMIN_TO_RAD;
+	}
 
 	// TODO: check that we have logical values
 
@@ -53,14 +71,18 @@ __global__ void calculateAngle(float* ra_A, float* decl_A, float* ra_B, float* d
 	int histogramBinIndex = theta_deg * BINS_PER_DEGREE; // Get the index by multiplying the angle by bins per degree
 
 	if (histogramBinIndex >= 0 && histogramBinIndex < BIN_RANGE * BINS_PER_DEGREE){ // ensure boundary
-		// TODO: maybe change to atomicInc, but that doesn't allow integers?!?
-		atomicAdd(&histogram[histogramBinIndex], 1);  // this probably slows down the execution time a lot
+		// TODO: maybe change to atomicInc, but that doesn't allow integers...
+		if (h == 1){
+			// DR
+			atomicAdd(&histogram_DR[histogramBinIndex], 1);  
+		} else if (h == 2){
+			// DD
+			atomicAdd(&histogram_DD[histogramBinIndex], 1);  
+		} else {
+			// RR
+			atomicAdd(&histogram_RR[histogramBinIndex], 1);  
+		}
 	}
-}
-
-__global__ void calculateOmega(int* DD, int* DR, int* RR, float* omega){
-	int i = blockDim.x * blockIdx.x + threadIdx.x;
-	omega[i] = (DD[i]-2*DR[i]+RR[i])/RR[i];
 }
 
 /*
@@ -246,11 +268,17 @@ int main(int argc, char *argv[])
 	int* h_histogramDD = (int*)malloc(histogrambytes);
 	int* h_histogramRR = (int*)malloc(histogrambytes);
 	
-	// allocate to GPU: the real and fake right ascension and declination
+	// allocate to GPU: 
+	// the real and fake right ascension and declination
 	float* d_raReal; cudaMalloc(&d_raReal, arraybytes);
 	float* d_declReal; cudaMalloc(&d_declReal, arraybytes);
 	float* d_raFake; cudaMalloc(&d_raFake, arraybytes);
 	float* d_declFake; cudaMalloc(&d_declFake, arraybytes);
+	// histograms
+	int *d_histogramDR, *d_histogramDD, *d_histogramRR;
+	cudaMalloc(&d_histogramDR, histogrambytes);
+	cudaMalloc(&d_histogramDD, histogrambytes);
+	cudaMalloc(&d_histogramRR, histogrambytes);
 
 	// copy data to the GPU
 	cudaMemcpy(d_raReal, h_raReal, arraybytes, cudaMemcpyHostToDevice);
@@ -259,43 +287,24 @@ int main(int argc, char *argv[])
 	cudaMemcpy(d_declFake, h_declFake, arraybytes, cudaMemcpyHostToDevice);
 
 	// Size of thread blocks
-	int blocksInGrid = (totalPairs + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+	size_t blocksInGrid = (3*totalPairs + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
 	printf("Blocks in grid: %d\n", blocksInGrid);
 
 	// run the kernels on the GPU
 	// THIS CALCULATES DR
 	// 1. Calculate Real vs. Fake (DR histogram) - already implemented
-    printf("================= CALCULATING DR ANGLES =====================\n");
-	int *d_histogramDR;
-	cudaMalloc(&d_histogramDR, histogrambytes);
-	cudaMemset(d_histogramDR, 0, histogrambytes);
-    calculateAngle<<<blocksInGrid, THREADS_PER_BLOCK>>>(d_raReal, d_declReal, d_raFake, d_declFake, d_histogramDR, N);
-	memset(h_histogramDR, 0, histogrambytes);
-    cudaMemcpy(h_histogramDR, d_histogramDR, histogrambytes, cudaMemcpyDeviceToHost);
-
-    // 2. Calculate Real vs. Real (DD histogram)
-    printf("================= CALCULATING DD ANGLES =====================\n");
-	int *d_histogramDD;
-	cudaMalloc(&d_histogramDD, histogrambytes);
-	cudaMemset(d_histogramDD, 0, histogrambytes);
-    calculateAngle<<<blocksInGrid, THREADS_PER_BLOCK>>>(d_raReal, d_declReal, d_raReal, d_declReal, d_histogramDD, N);
-	memset(h_histogramDD, 0, histogrambytes);
-    cudaMemcpy(h_histogramDD, d_histogramDD, histogrambytes, cudaMemcpyDeviceToHost);
-
-    // 3. Calculate Fake vs. Fake (RR histogram)
-    printf("================= CALCULATING RR ANGLES =====================\n");
-	int *d_histogramRR;
-	cudaMalloc(&d_histogramRR, histogrambytes);
-	cudaMemset(d_histogramRR, 0, histogrambytes);
-    calculateAngle<<<blocksInGrid, THREADS_PER_BLOCK>>>(d_raFake, d_declFake, d_raFake, d_declFake, d_histogramRR, N);
-	memset(h_histogramRR, 0, histogrambytes);
-    cudaMemcpy(h_histogramRR, d_histogramRR, histogrambytes, cudaMemcpyDeviceToHost);
+    printf("==================== CALCULATING ANGLES =====================\n");
 	
+    calculateAngle<<<blocksInGrid, THREADS_PER_BLOCK>>>(d_raReal, d_declReal, d_raFake, d_declFake, d_histogramDD, d_histogramDR, d_histogramRR, N);
+	cudaMemcpy(h_histogramDR, d_histogramDR, histogrambytes, cudaMemcpyDeviceToHost);
+	cudaMemcpy(h_histogramDR, d_histogramDR, histogrambytes, cudaMemcpyDeviceToHost);
+	cudaMemcpy(h_histogramDR, d_histogramDR, histogrambytes, cudaMemcpyDeviceToHost);
 	printf("DONE!\n");
 	
 	// Free memory
 	cudaFree(d_declReal); cudaFree(d_raReal); 
 	cudaFree(d_declFake); cudaFree(d_raFake);
+	cudaFree(d_histogramDD); cudaFree(d_histogramDR); cudaFree(d_histogramRR);
 
 	end = clock();
 	time_used = ((double) (end - start)) / CLOCKS_PER_SEC * 1000.0;
@@ -314,17 +323,16 @@ int main(int argc, char *argv[])
 	printf("\n");
     
 	printf("===================== CALCULATING OMEGA =====================\n");
-	// calculate omega values on the GPU
+	// calculate omega values on the CPU
 	size_t omegabytes = BIN_RANGE*BINS_PER_DEGREE*sizeof(float);
 	float* h_omega = (float*)malloc(omegabytes);
-	float* d_omega;
-	cudaMalloc(&d_omega, omegabytes);
-
-	blocksInGrid = ((BIN_RANGE*BINS_PER_DEGREE) + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
-	calculateOmega<<<blocksInGrid, THREADS_PER_BLOCK>>>(d_histogramDD, d_histogramDR, d_histogramRR, d_omega);
-	cudaMemcpy(h_omega, d_omega, omegabytes, cudaMemcpyDeviceToHost);
-
-	cudaFree(d_histogramDD); cudaFree(d_histogramDR); cudaFree(d_histogramRR); cudaFree(d_omega); 
+	
+	for (int i=0; i<BIN_RANGE*BINS_PER_DEGREE; i++){
+		if (h_histogramRR[i] == 0){
+			printf("Division by zero!\n");
+		}
+		h_omega[i] = (h_histogramDD[i] - (2*h_histogramDR[i]) + h_histogramRR[i]) / h_histogramRR[i];
+	}
 
 	// write omega values to omega.out
 	printf("=================== SAVING OMEGA VALUES =====================\n");
@@ -353,7 +361,7 @@ int main(int argc, char *argv[])
 	printf("======================= DONE, GOODBYE! ======================\n");
 
 	// Free host memory
-	free(h_histogramDD); free(h_histogramDR); free(h_histogramRR);
+	free(h_histogramDD); free(h_histogramDR); free(h_histogramRR); free(h_omega);
 
 	return (0);
 }
