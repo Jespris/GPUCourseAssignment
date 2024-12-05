@@ -9,24 +9,24 @@
 #include <fstream>  // Include for file output
 #include <iomanip> // Required for std::fixed and std::setprecision
 
-#define BIN_RANGE 180
+#define BIN_RANGE 90 // Doesn't work with 180?
 #define BINS_PER_DEGREE 4
-#define THREADS_PER_BLOCK 512
+#define THREADS_PER_BLOCK 256
 #define RAD_TO_DEG 57.29577951
 
 __global__ void calculateAngle(float* ra_A, float* decl_A, float* ra_B, float* decl_B, int* histogram, int N){
 	float theta_deg;
 	
-	long long int r = (long long int)(blockDim.x * blockIdx.x + threadIdx.x);
-	int i = r / N;  // index of A 
-	int k = r % N;  // index of B
+	int tid = (blockDim.x * blockIdx.x + threadIdx.x);  // thread ID
+	int k = tid % N;  // index of B
+	int i = (tid - k) / N;  // index of A 
 
 	if (i > N || k > N) {  // check that we're in bounds
+		printf("Not in bounds\n");
 		return;
 	}
 
-	// convert angles from arc minutes to radians
-
+	// helper variables
 	float alpha_A = ra_A[i];
 	float delta_A = decl_A[i];
 	float alpha_B = ra_B[k];
@@ -35,24 +35,53 @@ __global__ void calculateAngle(float* ra_A, float* decl_A, float* ra_B, float* d
 	// TODO: check that we have logical values
 
 	float dotProduct = cos(delta_A)*cos(delta_B)*cos(alpha_A-alpha_B)+sin(delta_A)*sin(delta_B);
-	dotProduct = fminf(1.0f, fmaxf(dotProduct, -1.0f)); // Clamp to [-1, 1]
+	// dotProduct = fminf(1.0f, fmaxf(dotProduct, -1.0f)); // Clamp to [-1, 1]
 
 	float theta_rad = acosf(dotProduct);
 	theta_deg = theta_rad * RAD_TO_DEG;
-	theta_deg = fminf(180.0f, fmaxf(theta_deg, 0.0f));  // Clamp to [0, 180]
+	if (theta_deg < 0.0f){
+		// Acosf should return positive values only lol
+		printf("theta_deg is somehow negative?!?\n");
+	}
+	if (theta_deg > 180.0f){
+		printf("theta_deg is larger than 180 degrees?!?\n");
+	}
+	// Remove floating point errors by clamping to [0, 180]
+	// theta_deg = fminf(180.0f, fmaxf(theta_deg, 0.0f)); 
 
 	// histogram time!
 	int histogramBinIndex = theta_deg * BINS_PER_DEGREE; // Get the index by multiplying the angle by bins per degree
 
-	if (histogramBinIndex >= 0 && histogramBinIndex < BIN_RANGE * BINS_PER_DEGREE){ // ensure boundary
-		// TODO: maybe change to atomicInc, but that doesn't allow integers?!?
-		atomicAdd(&histogram[histogramBinIndex], 1);  // this probably slows down the execution time a lot
+	if (histogramBinIndex >= 0 && histogramBinIndex < (BIN_RANGE * BINS_PER_DEGREE)){ // ensure boundary
+		// TODO: maybe change to atomicInc, but then we need to change to size_t type arrays or something
+		atomicAdd(&histogram[histogramBinIndex], 1);  // incementing histograms now, probably slows down the execution time a lot, 
+		// but we don't have to launch another GPU program
 	}
 }
 
-__global__ void calculateOmega(int* DD, int* DR, int* RR, float* omega){
-	int i = blockDim.x * blockIdx.x + threadIdx.x;
-	omega[i] = (DD[i]-2*DR[i]+RR[i])/RR[i];
+void verbose_omega(float* omega){
+	printf("\nThe first five bins: \n");
+	for (int i=0; i<5; i++){
+		printf("Bin [%d] value: 	 %.5f\n", i, omega[i]);
+	}
+
+	// Prepare vector of (bin index, value) pairs for sorting
+    std::vector<std::pair<int, float>> bin_counts;
+    for (int i = 0; i < BIN_RANGE*BINS_PER_DEGREE; i++) {
+        bin_counts.push_back(std::make_pair(i, omega[i]));
+    }
+
+	// Sort by count in descending order for top 3, ascending for bottom 3
+    std::sort(bin_counts.begin(), bin_counts.end(), [](const auto &a, const auto &b) { return a.second > b.second; });
+
+    // Top 3 bins with the most entries
+    printf("\nTop 3 most populated bins:\n");
+    for (int j = 0; j < 3 && j < bin_counts.size(); j++) {
+        int bin_idx = bin_counts[j].first;
+        float count = bin_counts[j].second;
+        float angle = (float)bin_idx / BINS_PER_DEGREE;  // Convert bin index to angle in degrees
+        printf("Bin %d (Angle ≈ %.2f°): Value = %.5f\n", bin_idx, angle, count);
+    }
 }
 
 void verbose_histogram(int* histogram) {
@@ -150,12 +179,12 @@ void save_histogram_to_file(const int* histogram, int num_bins, const char* file
 
 
 // data for the real galaxies will be read into these arrays
-float *h_raReal, *h_declReal;
+float *h_phiReal, *h_thetaReal;
 // number of real galaxies
 int nrReal;
 
 // data for the simulated random galaxies will be read into these arrays
-float *h_raFake, *h_declFake;
+float *h_phiFake, *h_thetaFake;
 // number of simulated random galaxies
 int nrFake;
 
@@ -186,7 +215,6 @@ int main(int argc, char *argv[])
 		return (-1);
 	}
 		
-
 	// make sure input array sizes are the same
 	
 	int N = nrReal;
@@ -213,16 +241,16 @@ int main(int argc, char *argv[])
 	int* h_histogramRR = (int*)malloc(histogrambytes);
 	
 	// allocate to GPU: the real and fake right ascension and declination
-	float* d_raReal; cudaMalloc(&d_raReal, arraybytes);
-	float* d_declReal; cudaMalloc(&d_declReal, arraybytes);
-	float* d_raFake; cudaMalloc(&d_raFake, arraybytes);
-	float* d_declFake; cudaMalloc(&d_declFake, arraybytes);
+	float* d_phiReal; cudaMalloc(&d_phiReal, arraybytes);
+	float* d_thetaReal; cudaMalloc(&d_thetaReal, arraybytes);
+	float* d_phiFake; cudaMalloc(&d_phiFake, arraybytes);
+	float* d_thetaFake; cudaMalloc(&d_thetaFake, arraybytes);
 
 	// copy data to the GPU
-	cudaMemcpy(d_raReal, h_raReal, arraybytes, cudaMemcpyHostToDevice);
-	cudaMemcpy(d_declReal, h_declReal, arraybytes, cudaMemcpyHostToDevice);
-	cudaMemcpy(d_raFake, h_raFake, arraybytes, cudaMemcpyHostToDevice);
-	cudaMemcpy(d_declFake, h_declFake, arraybytes, cudaMemcpyHostToDevice);
+	cudaMemcpy(d_phiReal, h_phiReal, arraybytes, cudaMemcpyHostToDevice);
+	cudaMemcpy(d_thetaReal, h_thetaReal, arraybytes, cudaMemcpyHostToDevice);
+	cudaMemcpy(d_phiFake, h_phiFake, arraybytes, cudaMemcpyHostToDevice);
+	cudaMemcpy(d_thetaFake, h_thetaFake, arraybytes, cudaMemcpyHostToDevice);
 
 	// Size of thread blocks
 	int blocksInGrid = (totalPairs + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
@@ -235,38 +263,75 @@ int main(int argc, char *argv[])
 	int *d_histogramDR;
 	cudaMalloc(&d_histogramDR, histogrambytes);
 	cudaMemset(d_histogramDR, 0, histogrambytes);
-    calculateAngle<<<blocksInGrid, THREADS_PER_BLOCK>>>(d_raReal, d_declReal, d_raFake, d_declFake, d_histogramDR, N);
+    calculateAngle<<<blocksInGrid, THREADS_PER_BLOCK>>>(d_phiReal, d_thetaReal, d_phiFake, d_thetaFake, d_histogramDR, N);
 	memset(h_histogramDR, 0, histogrambytes);
     cudaMemcpy(h_histogramDR, d_histogramDR, histogrambytes, cudaMemcpyDeviceToHost);
+	cudaFree(d_histogramDR); 
 
     // 2. Calculate Real vs. Real (DD histogram)
     printf("================= CALCULATING DD ANGLES =====================\n");
 	int *d_histogramDD;
 	cudaMalloc(&d_histogramDD, histogrambytes);
 	cudaMemset(d_histogramDD, 0, histogrambytes);
-    calculateAngle<<<blocksInGrid, THREADS_PER_BLOCK>>>(d_raReal, d_declReal, d_raReal, d_declReal, d_histogramDD, N);
+    calculateAngle<<<blocksInGrid, THREADS_PER_BLOCK>>>(d_phiReal, d_thetaReal, d_phiReal, d_thetaReal, d_histogramDD, N);
 	memset(h_histogramDD, 0, histogrambytes);
     cudaMemcpy(h_histogramDD, d_histogramDD, histogrambytes, cudaMemcpyDeviceToHost);
+	cudaFree(d_histogramDD); 
 
     // 3. Calculate Fake vs. Fake (RR histogram)
     printf("================= CALCULATING RR ANGLES =====================\n");
 	int *d_histogramRR;
 	cudaMalloc(&d_histogramRR, histogrambytes);
 	cudaMemset(d_histogramRR, 0, histogrambytes);
-    calculateAngle<<<blocksInGrid, THREADS_PER_BLOCK>>>(d_raFake, d_declFake, d_raFake, d_declFake, d_histogramRR, N);
+    calculateAngle<<<blocksInGrid, THREADS_PER_BLOCK>>>(d_phiFake, d_thetaFake, d_phiFake, d_thetaFake, d_histogramRR, N);
 	memset(h_histogramRR, 0, histogrambytes);
     cudaMemcpy(h_histogramRR, d_histogramRR, histogrambytes, cudaMemcpyDeviceToHost);
+	cudaFree(d_histogramRR);
 	
 	printf("DONE!\n");
 	
 	// Free memory
-	cudaFree(d_declReal); cudaFree(d_raReal); 
-	cudaFree(d_declFake); cudaFree(d_raFake);
+	cudaFree(d_thetaReal); cudaFree(d_phiReal); 
+	cudaFree(d_thetaFake); cudaFree(d_phiFake);
+	
 
 	end = clock();
 	time_used = ((double) (end - start)) / CLOCKS_PER_SEC * 1000.0;
 	printf("Execution time: %.2f ms\n", time_used);
-	
+    
+	printf("===================== CALCULATING OMEGA =====================\n");
+	// calculate omega values on the CPU
+	// Memory management
+	size_t omegabytes = BIN_RANGE*BINS_PER_DEGREE*sizeof(float);
+	float* h_omega = (float*)malloc(omegabytes);
+	for (int i=0; i<BIN_RANGE*BINS_PER_DEGREE; i++){
+		float num = (float)(h_histogramDD[i] - (2*h_histogramDR[i]) + h_histogramRR[i]);
+		float den = (float)(h_histogramRR[i]);
+		if (den == 0.0f){
+			printf("Division by zero!\n");
+		} else {
+			h_omega[i] = (float)(num/den);
+		}
+	}
+
+	// write omega values to omega.out
+	printf("=================== SAVING OMEGA VALUES =====================\n");
+	std::ofstream outfile("omega.txt");
+    if (!outfile.is_open()) {
+        printf("Error opening file %s for writing.\n", "omega.txt");
+        return 0;
+    }
+
+    for (int i = 0; i < BIN_RANGE*BINS_PER_DEGREE; i++) {
+        outfile << i << " " << h_omega[i] << "\n";
+    }
+    outfile.close();
+    printf("Omega values saved to %s\n", "omega.txt");
+
+	printf("====================== OMEGA SUMMARY ========================\n");
+
+	verbose_omega(h_omega);
+
 	printf("\n");
 	printf("================== SUMMARIZING HISTOGRAMS ===================\n");
 	printf("Summary for Real vs. Fake (DR):\n");
@@ -278,48 +343,17 @@ int main(int argc, char *argv[])
     printf("Summary for Fake vs. Fake (RR):\n");
     verbose_histogram(h_histogramRR);
 	printf("\n");
-    
-	printf("===================== CALCULATING OMEGA =====================\n");
-	// calculate omega values on the GPU
-	size_t omegabytes = BIN_RANGE*BINS_PER_DEGREE*sizeof(float);
-	float* h_omega = (float*)malloc(omegabytes);
-	float* d_omega;
-	cudaMalloc(&d_omega, omegabytes);
-
-	blocksInGrid = ((BIN_RANGE*BINS_PER_DEGREE) + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
-	calculateOmega<<<blocksInGrid, THREADS_PER_BLOCK>>>(d_histogramDD, d_histogramDR, d_histogramRR, d_omega);
-	cudaMemcpy(h_omega, d_omega, omegabytes, cudaMemcpyDeviceToHost);
-
-	cudaFree(d_histogramDD); cudaFree(d_histogramDR); cudaFree(d_histogramRR); cudaFree(d_omega); 
-
-	// write omega values to omega.out
-	printf("=================== SAVING OMEGA VALUES =====================\n");
-	std::ofstream outfile("omega.txt");
-    if (!outfile.is_open()) {
-        printf("Error opening file %s for writing.\n", "omega.txt");
-        return 0;
-    }
-
-	// Set fixed-point notation and specify precision
-	outfile << std::fixed << std::setprecision(6);
-
-    for (int i = 0; i < BIN_RANGE*BINS_PER_DEGREE; i++) {
-        outfile << i << " " << h_omega[i] << "\n";
-    }
-    outfile.close();
-    printf("Omega values saved to %s\n", "omega.txt");
 
 	printf("===================== SAVING HISTOGRAMS =====================\n");
-	// After each call to `verbose_histogram`, save the histogram to a file
+	// save the histogram to a file for analyzing later
 	save_histogram_to_file(h_histogramDR, BIN_RANGE * BINS_PER_DEGREE, "histogramDR.txt");
 	save_histogram_to_file(h_histogramDD, BIN_RANGE * BINS_PER_DEGREE, "histogramDD.txt");
 	save_histogram_to_file(h_histogramRR, BIN_RANGE * BINS_PER_DEGREE, "histogramRR.txt");
 
-
 	printf("======================= DONE, GOODBYE! ======================\n");
 
 	// Free host memory
-	free(h_histogramDD); free(h_histogramDR); free(h_histogramRR);
+	free(h_histogramDD); free(h_histogramDR); free(h_histogramRR); free(h_omega);
 
 	return (0);
 }
@@ -363,8 +397,8 @@ int readdata(char *argv1, char *argv2)
 	}
 
 	nrReal = linecount;
-	h_raReal = (float *)calloc(nrReal, sizeof(float));
-	h_declReal = (float *)calloc(nrReal, sizeof(float));
+	h_phiReal = (float *)calloc(nrReal, sizeof(float));
+	h_thetaReal = (float *)calloc(nrReal, sizeof(float));
 
 	// skip the number of galaxies in the input file
 	if (fgets(inbuf, 180, infil) == NULL)
@@ -378,8 +412,13 @@ int readdata(char *argv1, char *argv2)
 			fclose(infil);
 			return (-1);
 		}
-		h_raReal[i] = (float)ra;
-		h_declReal[i] = (float)dec;
+		// spherical coordinates phi and theta in radians:
+		// phi   = ra/60.0 * dpi/180.0;
+		// theta = (90.0-dec/60.0)*dpi/180.0;
+		// store values as phi and theta in radians instead of right ascension and declination in arc minutes
+
+		h_phiReal[i] = (float) (ra / 60.0f) * (dpi / 180.0f);
+		h_thetaReal[i] = (float) (90.0f - dec / 60.0f) * (dpi / 180.0f);
 		++i;
 	}
 
@@ -417,8 +456,8 @@ int readdata(char *argv1, char *argv2)
 	}
 
 	nrFake = linecount;
-	h_raFake = (float *)calloc(nrFake, sizeof(float));
-	h_declFake = (float *)calloc(nrFake, sizeof(float));
+	h_phiFake = (float *)calloc(nrFake, sizeof(float));
+	h_thetaFake = (float *)calloc(nrFake, sizeof(float));
 
 	// skip the number of galaxies in the input file
 	if (fgets(inbuf, 180, infil) == NULL)
@@ -437,8 +476,8 @@ int readdata(char *argv1, char *argv2)
 		// theta = (90.0-dec/60.0)*dpi/180.0;
 		// store values as phi and theta in radians instead of right ascension and declination in arc minutes
 
-		h_raFake[i] = (float) ra/60.0f * dpi / 180.0f;
-		h_declFake[i] = (float) (90.0f - dec / 60.0f) * dpi / 180.0f;
+		h_phiFake[i] = (float) (ra / 60.0f) * (dpi / 180.0f);
+		h_thetaFake[i] = (float) (90.0f - dec / 60.0f) * (dpi / 180.0f);
 		++i;
 	}
 

@@ -5,24 +5,13 @@ import os
 
 # Constants for bin grouping
 BINS_PER_DEGREE = 4  # 4 bins per degree
-DEGREE_AGGREGATION = 1  # Aggregate over 2 degrees
-BINS_PER_AGGREGATED_DEGREE = BINS_PER_DEGREE * DEGREE_AGGREGATION  # Total bins per 2 degrees
-ANGLE_RANGE = 180  # Total angle range in degrees
+ANGLE_RANGE = 90  # Total angle range in degrees
 
 
-def aggregate_histogram(data, bins_per_aggregated_degree):
-    """
-    Aggregates the histogram counts over specified bin intervals to reduce noise.
-    """
+def get_histogram_values(data):
     bin_counts = data[:, 1]  # Histogram counts for each bin
-    aggregated_counts = []
 
-    for i in range(0, len(bin_counts), bins_per_aggregated_degree):
-        # Sum counts for every group of bins representing DEGREE_AGGREGATION degrees
-        aggregated_counts.append(np.sum(bin_counts[i:i + bins_per_aggregated_degree]))
-
-    # Generate angle ranges for the aggregated bins (e.g., 0, 2, 4, ...)
-    angles = np.arange(0, ANGLE_RANGE, DEGREE_AGGREGATION)
+    # Generate angle ranges for the bins
     angles = np.arange(0, ANGLE_RANGE*BINS_PER_DEGREE)
 
     return np.array(angles), np.array(bin_counts)
@@ -30,16 +19,16 @@ def aggregate_histogram(data, bins_per_aggregated_degree):
 
 def plot_individual_histogram(file_path, output_image):
     """
-    Plots and saves an individual histogram with the specified angle aggregation and formatting.
+    Plots and saves an individual histogram with the specified formatting.
     """
     data = np.loadtxt(file_path, delimiter=' ')
-    angles, angle_counts = aggregate_histogram(data, BINS_PER_AGGREGATED_DEGREE)
+    angles, angle_counts = get_histogram_values(data)
 
     # Plot with log scale on y-axis
     plt.figure(figsize=(10, 6))
     plt.plot(angles, angle_counts, color='blue')
     plt.yscale('log')
-    plt.xlabel("Angle (degrees)")
+    plt.xlabel("Bin")
     plt.ylabel("Count (log scale)")
     plt.title(f"Histogram for {os.path.basename(output_image)}")
     plt.grid(True, which="both", ls="--", lw=0.5)
@@ -78,7 +67,7 @@ def plot_combined_histogram(histogram_files, output_dir):
 
     for label, (file_path, output_image) in histogram_files.items():
         data = np.loadtxt(file_path, delimiter=' ')
-        angles, angle_counts = aggregate_histogram(data, BINS_PER_AGGREGATED_DEGREE)
+        angles, angle_counts = get_histogram_values(data)
 
         # Plot each histogram line with a unique color and label
         plt.plot(angles, angle_counts, color=colors[label], label=label)
