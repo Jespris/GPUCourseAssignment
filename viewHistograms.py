@@ -5,7 +5,7 @@ import os
 
 # Constants for bin grouping
 BINS_PER_DEGREE = 4  # 4 bins per degree
-ANGLE_RANGE = 180  # Total angle range in degrees
+ANGLE_RANGE = 90  # Total angle range in degrees
 
 
 def get_histogram_values(data):

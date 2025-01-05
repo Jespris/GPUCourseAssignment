@@ -9,17 +9,15 @@
 #include <fstream>  // Include for file output
 #include <iomanip> // Required for std::fixed and std::setprecision
 
-#define DEGREE_RANGE 180 
+#define DEGREE_RANGE 90
 #define BINS_PER_DEGREE 4
-#define THREADS_PER_BLOCK 256
+#define THREADS_PER_BLOCK 1024
 #define RAD_TO_DEG 57.29577951f
 
 __global__ void calculateAngle(float* ra_A, float* decl_A, float* ra_B, float* decl_B, int* histogram, int N){
 	float theta_deg;
 	
 	int tid = (blockDim.x * blockIdx.x + threadIdx.x);  // thread ID
-	int k = tid % N;  // index of B
-	int i = (tid - k) / N;  // index of A 
 	
 	/*
 	if (i > N || k > N) {  // check that we're in bounds
@@ -29,34 +27,39 @@ __global__ void calculateAngle(float* ra_A, float* decl_A, float* ra_B, float* d
 	*/
 
 	// helper variables
-	float alpha_A = ra_A[i];
-	float delta_A = decl_A[i];
-	float alpha_B = ra_B[k];
-	float delta_B = decl_B[k];
+	float alpha_A = ra_A[tid];
+	float delta_A = decl_A[tid];
+	float alpha_B;
+	float delta_B;
+	float dotProduct;
+	float theta_rad;
+	int histogramBinIndex;
+	for (int k = 0; k < N; k++){ 
+		alpha_B = ra_B[k];
+		delta_B = decl_B[k];
 
-	// TODO: check that we have logical values
-	// printf("A1: %f, A2: %f, D1: %f, D2: %f\n", alpha_A, alpha_B, delta_A, delta_B);
+		// TODO: check that we have logical values
+		// printf("A1: %f, A2: %f, D1: %f, D2: %f\n", alpha_A, alpha_B, delta_A, delta_B);
 
-	float dotProduct = sin(delta_A)*sin(delta_B) + cos(delta_A)*cos(delta_B)*cos(alpha_A - alpha_B);
-	// printf("DotProduct: %.2f\n", dotProduct);
-	// dotProduct = fminf(1.0f, fmaxf(dotProduct, -1.0f)); // Clamp to [-1, 1] due to floating point erros
+		dotProduct = sin(delta_A)*sin(delta_B) + cos(delta_A)*cos(delta_B)*cos(alpha_A - alpha_B);
+		// printf("DotProduct: %.2f\n", dotProduct);
+		// dotProduct = fminf(1.0f, fmaxf(dotProduct, -1.0f)); // Clamp to [-1, 1] due to floating point erros
 
-	float theta_rad = acosf(dotProduct);  // Single precision will suffice
-	theta_deg = theta_rad * RAD_TO_DEG;
-	// printf("Theta in degrees: %.2f\n", theta_deg);
-	// Remove floating point errors by clamping to [0, 180]
-	theta_deg = fminf(179.999f, fmaxf(theta_deg, 0.0f)); 
+		theta_rad = acosf(dotProduct);  // Single precision will suffice
+		theta_deg = theta_rad * RAD_TO_DEG;
+		// printf("Theta in degrees: %.2f\n", theta_deg);
+		// Remove floating point errors by clamping to [0, 180]
+		theta_deg = fminf((float) DEGREE_RANGE - 0.001f, fmaxf(theta_deg, 0.0f)); 
 
-	// histogram time!
-	int histogramBinIndex = theta_deg * BINS_PER_DEGREE; // Get the index by multiplying the angle by bins per degree
-	// printf("Bin index for %.2f degrees: %d\n", theta_deg, histogramBinIndex);
+		// histogram time!
+		histogramBinIndex = theta_deg * BINS_PER_DEGREE; // Get the index by multiplying the angle by bins per degree
+		// printf("Bin index for %.2f degrees: %d\n", theta_deg, histogramBinIndex);
 
-	if (histogramBinIndex >= 0 && histogramBinIndex < (DEGREE_RANGE * BINS_PER_DEGREE)){ // ensure boundary
-		// TODO: maybe change to atomicInc, but then we need to change to size_t type arrays or something
-		atomicAdd(&histogram[histogramBinIndex], 1);  // incementing histograms now, probably slows down the execution time a lot, 
-		// but we don't have to launch another GPU program
-	} else {
-		printf("Outside bin range!\n");
+		if (histogramBinIndex >= 0 && histogramBinIndex < (DEGREE_RANGE * BINS_PER_DEGREE)){ // ensure boundary
+			// TODO: maybe change to atomicInc, but then we need to change to size_t type arrays or something
+			atomicAdd(&histogram[histogramBinIndex], 1);  // incementing histograms now, probably slows down the execution time a lot, 
+			// but we don't have to launch another GPU program
+		}
 	}
 }
 
@@ -152,7 +155,6 @@ int main(int argc, char *argv[]) {
 		return (-1);
 	}
 		
-
 	if (readdata(argv[1], argv[2]) != 0){
 		printf("Failed reading data!");
 		return (-1);
@@ -172,12 +174,12 @@ int main(int argc, char *argv[]) {
 	double time_used;
 	start = clock();
 
-	long int totalPairs = (long int)N*N;
+	// long int totalPairs = (long int)N*N;
 
 	// allocate memory on the GPU and histogram arrays memory on CPU
 	size_t arraybytes = N * sizeof(float);
-	size_t megabytes = (size_t)round((double)arraybytes / (1024 * 1024));
-	printf("Arraybytes: %zd = %zd MB\n", arraybytes, megabytes);
+	size_t kilobytes = (size_t)round((double)arraybytes / 1024);
+	printf("Arraybytes: %zd = %zd kB\n", arraybytes, kilobytes);
 
 	size_t histogrambytes = DEGREE_RANGE * BINS_PER_DEGREE * sizeof(int);
 	int* h_histogramDR = (int*)malloc(histogrambytes);
@@ -197,7 +199,7 @@ int main(int argc, char *argv[]) {
 	cudaMemcpy(d_thetaFake, h_thetaFake, arraybytes, cudaMemcpyHostToDevice);
 
 	// Size of thread blocks
-	int blocksInGrid = (totalPairs + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+	int blocksInGrid = (N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
 	printf("Blocks in grid: %d\n", blocksInGrid);
 
 	// run the kernels on the GPU
