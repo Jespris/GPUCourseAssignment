@@ -2,12 +2,12 @@
 0. GOTO home directory
 cd C:\Programmering\GPU_Course_Assignments
 1. Copy .cu to dione:
-scp <>.cu jespande@dione.utu.fi
+scp <>.cu jespande@dione.utu.fi:
 2. login to dione:
 ssh jespande@dione.utu.fi
 3. Run program
 module load cuda
-moduel load GCC/7.3.0-2.30
+module load GCC/7.3.0-2.30
 nvcc -O3 -arch=sm_70 -o galaxy <>.cu
 srun -p gpu -n 1 -t 10:00 --mem=1G -e err.txt -o out.txt ./galaxy data_100k_arcmin.dat flat_100k_arcmin.dat omega.out
 4. Logout of dione

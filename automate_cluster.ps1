@@ -13,12 +13,12 @@ if ($runRemotely){
 
 
     # 1. Copy galaxyCalculation.cu to the remote cluster
-    Write-Output "Copying galaxyCalculation.cu to the remote cluster..."
-    & pscp -pw $password galaxyCalculation.cu "$remoteUser@${remoteHost}:"
+    Write-Output "Copying cuda program to the remote cluster..."
+    & pscp -pw $password gpuUppg.cu "$remoteUser@${remoteHost}:"
 
     # 2. SSH to the remote cluster and run commands
     Write-Output "Running commands on the remote cluster..."
-    & plink -pw $password $remoteUser@$remoteHost "module load cuda && module load GCC/7.3.0-2.30 && nvcc -O3 -arch=sm_70 -o galaxy galaxyCalculation.cu && srun -p gpu -n 1 -t 10:00 --mem=1G -e err.txt -o out.txt ./galaxy data_100k_arcmin.dat flat_100k_arcmin.dat omega.out && echo 'Job completed on remote cluster.'"
+    & plink -pw $password $remoteUser@$remoteHost "module load cuda && module load GCC/7.3.0-2.30 && nvcc -O3 -arch=sm_70 -o galaxy gpuUppg.cu && srun -p gpu -n 1 -t 10:00 --mem=10G -e err.txt -o out.txt ./galaxy data_100k_arcmin.dat flat_100k_arcmin.dat omega.out && echo 'Job completed on remote cluster.'"
 
     # 3. Copy output files from the remote cluster to the local machine
     Write-Output "Copying result files from the remote cluster..."
@@ -33,12 +33,12 @@ if ($runRemotely){
     # local execution
     # Ensure CUDA is available locally
     if (-Not (Get-Command "nvcc" -ErrorAction SilentlyContinue)) {
-        Write-Output "nvcc is not available on the local machine. Please install CUDA Toolkit and ensure it is in your PATH."
+        Write-Output "nvcc is not available on the local machine."
         exit
     }
 
     # Compile galaxyCalculation.cu locally
-    Write-Output "Compiling galaxyCalculation.cu locally..."
+    Write-Output "Compiling cuda program locally..."
     & nvcc -O3 -arch=sm_70 -o galaxy galaxyCalculation.cu
 
     # Execute the compiled binary locally

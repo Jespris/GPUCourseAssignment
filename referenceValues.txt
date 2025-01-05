@@ -1,0 +1,10 @@
+Here are some of the first histogram values for the results (0-0.25 deg, 0.25-0.50 deg,0.50-0.75 deg, 0.75-1.0 deg):
+
+   DR                  396689     1183136    1946052   2673801   3384925 ...   DR histogram sum = 10000000000  Ok!
+   DD                  2351294    4356028    5588978   6483488   7323488 ...   DD histogram sum = 10000000000  Ok!
+   RR                  1140864    2673408    4058222   5272610   6389396 ...   RR histogram sum = 10000000000  Ok!
+   omega values:       2.36556    1.74428    1.41813   1.21543   1.08665
+
+These are the omega values and the counts in the histogram bins. 
+Please note that you will probably have slightly different values in the histogram bins, but the omega values should come out rather close to these values, 
+say three decimal digits! Starting from the bin corresponding to 7 degrees, all the rest of the omega values should be roughly in the range [-0.5,+0.5].

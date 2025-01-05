@@ -85,105 +85,455 @@ Blocks in grid: 39062500
 ================= CALCULATING DD ANGLES =====================
 ================= CALCULATING RR ANGLES =====================
 DONE!
-Execution time: 10820.00 ms
+GPU Execution time: 52.11 s
 ===================== CALCULATING OMEGA =====================
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
+Division by zero!
 =================== SAVING OMEGA VALUES =====================
 Omega values saved to omega.txt
 ====================== OMEGA SUMMARY ========================
 
-The first five bins: 
-Bin [0] value: 	 24.04881
-Bin [1] value: 	 10.66441
-Bin [2] value: 	 7.21793
-Bin [3] value: 	 5.63022
-Bin [4] value: 	 4.71779
-
-Top 3 most populated bins:
-Bin 0 (Angle ≈ 0.00°): Value = 24.04881
-Bin 1 (Angle ≈ 0.25°): Value = 10.66441
-Bin 2 (Angle ≈ 0.50°): Value = 7.21793
+The first thirty bins: 
+Bin [0] value: 	 1.32040
+Bin [1] value: 	 0.48301
+Bin [2] value: 	 0.47294
+Bin [3] value: 	 0.46243
+Bin [4] value: 	 0.44655
+Bin [5] value: 	 0.44004
+Bin [6] value: 	 0.44401
+Bin [7] value: 	 0.43909
+Bin [8] value: 	 0.42107
+Bin [9] value: 	 0.40334
+Bin [10] value: 	 0.39946
+Bin [11] value: 	 0.38983
+Bin [12] value: 	 0.36616
+Bin [13] value: 	 0.34688
+Bin [14] value: 	 0.34320
+Bin [15] value: 	 0.34583
+Bin [16] value: 	 0.33198
+Bin [17] value: 	 0.33276
+Bin [18] value: 	 0.32438
+Bin [19] value: 	 0.32157
+Bin [20] value: 	 0.30196
+Bin [21] value: 	 0.29526
+Bin [22] value: 	 0.29443
+Bin [23] value: 	 0.29993
+Bin [24] value: 	 0.29302
+Bin [25] value: 	 0.28064
+Bin [26] value: 	 0.27141
+Bin [27] value: 	 0.26826
+Bin [28] value: 	 0.25348
+Bin [29] value: 	 0.24671
 
 ================== SUMMARIZING HISTOGRAMS ===================
 Summary for Real vs. Fake (DR):
 
 The first five bins: 
-Bin [0] count: 	 400904
-Bin [1] count: 	 1074446
-Bin [2] count: 	 1723972
-Bin [3] count: 	 2373183
-Bin [4] count: 	 3003962
-
-Top 3 most populated bins:
-Bin 152 (Angle ≈ 38.00°): Count = 47721401
-Bin 153 (Angle ≈ 38.25°): Count = 47683299
-Bin 154 (Angle ≈ 38.50°): Count = 47616683
-
-Bottom 3 least populated bins (non-zero):
-Bin 0 (Angle ≈ 0.00°): Count = 400904
-Bin 359 (Angle ≈ 89.75°): Count = 568290
-Bin 358 (Angle ≈ 89.50°): Count = 734465
+Bin [0] count: 	 1918456041
+Bin [1] count: 	 734736
+Bin [2] count: 	 1180847
+Bin [3] count: 	 1603198
+Bin [4] count: 	 2027440
 
 Histogram Summary:
-Total count: 9999999808
-Mean bin height: 27777777.24
-Mode bin: 152 with height 47721401
-Standard deviation of bin heights: 14717517.99
-Non-zero bin range: 0 to 359
+Total count: 10000000000
+Mean bin height: 13888888.89
+Mode bin: 0 with height 1918456041
+Standard deviation of bin heights: 72474088.44
+Non-zero bin range: 0 to 360
 
 Summary for Real vs. Real (DD):
 
 The first five bins: 
-Bin [0] count: 	 29171395
-Bin [1] count: 	 29878276
-Bin [2] count: 	 30554541
-Bin [3] count: 	 31114696
-Bin [4] count: 	 31824188
-
-Top 3 most populated bins:
-Bin 110 (Angle ≈ 27.50°): Count = 52998573
-Bin 111 (Angle ≈ 27.75°): Count = 52974083
-Bin 109 (Angle ≈ 27.25°): Count = 52776579
-
-Bottom 3 least populated bins (non-zero):
-Bin 359 (Angle ≈ 89.75°): Count = 68052
-Bin 358 (Angle ≈ 89.50°): Count = 98679
-Bin 357 (Angle ≈ 89.25°): Count = 120749
+Bin [0] count: 	 -851914876
+Bin [1] count: 	 858550
+Bin [2] count: 	 1376790
+Bin [3] count: 	 1868838
+Bin [4] count: 	 2353502
 
 Histogram Summary:
-Total count: 10000000000
-Mean bin height: 27777777.78
-Mode bin: 110 with height 52998573
-Standard deviation of bin heights: 18788538.41
-Non-zero bin range: 0 to 359
+Total count: 5705032704
+Mean bin height: 7923656.53
+Mode bin: 155 with height 35834708
+Standard deviation of bin heights: 34349640.38
+Non-zero bin range: 1 to 360
 
 Summary for Fake vs. Fake (RR):
 
 The first five bins: 
-Bin [0] count: 	 1230848
-Bin [1] count: 	 2869228
-Bin [2] count: 	 4359422
-Bin [3] count: 	 5694837
-Bin [4] count: 	 6943974
-
-Top 3 most populated bins:
-Bin 115 (Angle ≈ 28.75°): Count = 43611232
-Bin 117 (Angle ≈ 29.25°): Count = 43607315
-Bin 118 (Angle ≈ 29.50°): Count = 43599543
-
-Bottom 3 least populated bins (non-zero):
-Bin 359 (Angle ≈ 89.75°): Count = 484027
-Bin 358 (Angle ≈ 89.50°): Count = 642708
-Bin 357 (Angle ≈ 89.25°): Count = 803719
+Bin [0] count: 	 -1229262777
+Bin [1] count: 	 1181691
+Bin [2] count: 	 1868665
+Bin [3] count: 	 2488157
+Bin [4] count: 	 3074134
 
 Histogram Summary:
-Total count: 9999999616
-Mean bin height: 27777776.71
-Mode bin: 115 with height 43611232
-Standard deviation of bin heights: 13262822.13
-Non-zero bin range: 0 to 359
+Total count: 5705032704
+Mean bin height: 7923656.53
+Mode bin: 126 with height 28865046
+Standard deviation of bin heights: 47459337.14
+Non-zero bin range: 1 to 360
 
 ===================== SAVING HISTOGRAMS =====================
 Histogram saved to histogramDR.txt
 Histogram saved to histogramDD.txt
 Histogram saved to histogramRR.txt
 ======================= DONE, GOODBYE! ======================
+CPU Execution time: 0.00 ms

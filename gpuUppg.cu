@@ -9,10 +9,10 @@
 #include <fstream>  // Include for file output
 #include <iomanip> // Required for std::fixed and std::setprecision
 
-#define BIN_RANGE 90 // Doesn't work with 180?
+#define DEGREE_RANGE 180 
 #define BINS_PER_DEGREE 4
 #define THREADS_PER_BLOCK 256
-#define RAD_TO_DEG 57.29577951
+#define RAD_TO_DEG 57.29577951f
 
 __global__ void calculateAngle(float* ra_A, float* decl_A, float* ra_B, float* decl_B, int* histogram, int N){
 	float theta_deg;
@@ -20,7 +20,7 @@ __global__ void calculateAngle(float* ra_A, float* decl_A, float* ra_B, float* d
 	int tid = (blockDim.x * blockIdx.x + threadIdx.x);  // thread ID
 	int k = tid % N;  // index of B
 	int i = (tid - k) / N;  // index of A 
-
+	
 	if (i > N || k > N) {  // check that we're in bounds
 		printf("Not in bounds\n");
 		return;
@@ -33,55 +33,37 @@ __global__ void calculateAngle(float* ra_A, float* decl_A, float* ra_B, float* d
 	float delta_B = decl_B[k];
 
 	// TODO: check that we have logical values
+	// printf("Alpha A: %f, Alpha B: %f, Delta A: %f, Delta B: %f", alpha_A, alpha_B, delta_A, delta_B);
 
-	float dotProduct = cos(delta_A)*cos(delta_B)*cos(alpha_A-alpha_B)+sin(delta_A)*sin(delta_B);
-	// dotProduct = fminf(1.0f, fmaxf(dotProduct, -1.0f)); // Clamp to [-1, 1]
+	float dotProduct = sin(delta_A)*sin(delta_B) + cos(delta_B)*cos(delta_B)*cos(alpha_A - alpha_B);
+	// printf("DotProduct: %.2f\n", dotProduct);
+	if (dotProduct < 0.0f){
+		// printf("Negative dotProduct yay!\n");
+	}
+	dotProduct = fminf(1.0f, fmaxf(dotProduct, -1.0f)); // Clamp to [-1, 1] due to floating point erros
 
-	float theta_rad = acosf(dotProduct);
+	float theta_rad = acosf(dotProduct);  // Single precision will suffice
 	theta_deg = theta_rad * RAD_TO_DEG;
-	if (theta_deg < 0.0f){
-		// Acosf should return positive values only lol
-		printf("theta_deg is somehow negative?!?\n");
-	}
-	if (theta_deg > 180.0f){
-		printf("theta_deg is larger than 180 degrees?!?\n");
-	}
 	// Remove floating point errors by clamping to [0, 180]
-	// theta_deg = fminf(180.0f, fmaxf(theta_deg, 0.0f)); 
+	theta_deg = fminf(180.0f, fmaxf(theta_deg, 0.0f)); 
 
 	// histogram time!
 	int histogramBinIndex = theta_deg * BINS_PER_DEGREE; // Get the index by multiplying the angle by bins per degree
 
-	if (histogramBinIndex >= 0 && histogramBinIndex < (BIN_RANGE * BINS_PER_DEGREE)){ // ensure boundary
+	if (histogramBinIndex >= 0 && histogramBinIndex < (DEGREE_RANGE * BINS_PER_DEGREE)){ // ensure boundary
 		// TODO: maybe change to atomicInc, but then we need to change to size_t type arrays or something
 		atomicAdd(&histogram[histogramBinIndex], 1);  // incementing histograms now, probably slows down the execution time a lot, 
 		// but we don't have to launch another GPU program
+	} else {
+		printf("Outside bin range!\n");
 	}
 }
 
 void verbose_omega(float* omega){
-	printf("\nThe first five bins: \n");
-	for (int i=0; i<5; i++){
+	printf("\nThe first thirty omega bins: \n");
+	for (int i=0; i < 30; i++){
 		printf("Bin [%d] value: 	 %.5f\n", i, omega[i]);
 	}
-
-	// Prepare vector of (bin index, value) pairs for sorting
-    std::vector<std::pair<int, float>> bin_counts;
-    for (int i = 0; i < BIN_RANGE*BINS_PER_DEGREE; i++) {
-        bin_counts.push_back(std::make_pair(i, omega[i]));
-    }
-
-	// Sort by count in descending order for top 3, ascending for bottom 3
-    std::sort(bin_counts.begin(), bin_counts.end(), [](const auto &a, const auto &b) { return a.second > b.second; });
-
-    // Top 3 bins with the most entries
-    printf("\nTop 3 most populated bins:\n");
-    for (int j = 0; j < 3 && j < bin_counts.size(); j++) {
-        int bin_idx = bin_counts[j].first;
-        float count = bin_counts[j].second;
-        float angle = (float)bin_idx / BINS_PER_DEGREE;  // Convert bin index to angle in degrees
-        printf("Bin %d (Angle ≈ %.2f°): Value = %.5f\n", bin_idx, angle, count);
-    }
 }
 
 void verbose_histogram(int* histogram) {
@@ -89,10 +71,10 @@ void verbose_histogram(int* histogram) {
     int max_height = 0;
     int mode_bin = 0;
     int non_zero_start = -1, non_zero_end = -1;
-    int NUM_BINS = BIN_RANGE * BINS_PER_DEGREE;
+    int num_bins = DEGREE_RANGE * BINS_PER_DEGREE;
 
     // Calculate total count, find max height and mode, and locate non-zero range
-    for (int i = 0; i < NUM_BINS; i++) {
+    for (int i = 0; i < num_bins; i++) {
         total_count += histogram[i];
         
         if (histogram[i] > max_height) {
@@ -107,53 +89,18 @@ void verbose_histogram(int* histogram) {
     }
     
     // Mean and standard deviation
-    double mean_height = (double)total_count / NUM_BINS;
+    double mean_height = (double)total_count / num_bins;
     double variance = 0.0;
-    for (int i = 0; i < NUM_BINS; i++) {
+    for (int i = 0; i < num_bins; i++) {
         variance += pow(histogram[i] - mean_height, 2);
     }
-    variance /= NUM_BINS;
+    variance /= num_bins;
     double stddev = sqrt(variance);
 
-    // Prepare vector of (bin index, count) pairs for sorting
-    std::vector<std::pair<int, int>> bin_counts;
-    for (int i = 0; i < NUM_BINS; i++) {
-        bin_counts.push_back(std::make_pair(i, histogram[i]));
-    }
-
 	printf("\nThe first five bins: \n");
-	for (int i=0; i<5; i++){
+	for (int i=0; i < 5; i++){
 		printf("Bin [%d] count: 	 %d\n", i, histogram[i]);
 	}
-
-    // Sort by count in descending order for top 3, ascending for bottom 3
-    std::sort(bin_counts.begin(), bin_counts.end(), [](const auto &a, const auto &b) { return a.second > b.second; });
-
-    // Top 3 bins with the most entries
-    printf("\nTop 3 most populated bins:\n");
-    for (int j = 0; j < 3 && j < bin_counts.size(); j++) {
-        int bin_idx = bin_counts[j].first;
-        int count = bin_counts[j].second;
-        float angle = (float)bin_idx / BINS_PER_DEGREE;  // Convert bin index to angle in degrees
-        printf("Bin %d (Angle ≈ %.2f°): Count = %d\n", bin_idx, angle, count);
-    }
-
-    // Sort by ascending order to find bottom 3 non-zero populated bins
-    std::sort(bin_counts.begin(), bin_counts.end(), [](const auto &a, const auto &b) { return a.second < b.second; });
-
-    // Bottom 3 bins with the least entries (excluding zero counts)
-    printf("\nBottom 3 least populated bins (non-zero):\n");
-    int count_bottom = 0;
-    for (const auto& bin : bin_counts) {
-        if (bin.second > 0) {  // Exclude zero entries
-            int bin_idx = bin.first;
-            int count = bin.second;
-            float angle = (float)bin_idx / BINS_PER_DEGREE;  // Convert bin index to angle in degrees
-            printf("Bin %d (Angle ≈ %.2f°): Count = %d\n", bin_idx, angle, count);
-            count_bottom++;
-            if (count_bottom >= 3) break;  // Only get bottom 3
-        }
-    }
 
     // Output summary
     printf("\nHistogram Summary:\n");
@@ -187,9 +134,6 @@ int nrReal;
 float *h_phiFake, *h_thetaFake;
 // number of simulated random galaxies
 int nrFake;
-
-int *histogramDR, *histogramDD, *histogramRR;
-int *d_histogram;
 
 int main(int argc, char *argv[])
 {
@@ -235,7 +179,7 @@ int main(int argc, char *argv[])
 	size_t arraybytes = N * sizeof(float);
 	printf("Arraybytes: %d\n", arraybytes);
 
-	size_t histogrambytes = BIN_RANGE * BINS_PER_DEGREE * sizeof(int);
+	size_t histogrambytes = DEGREE_RANGE * BINS_PER_DEGREE * sizeof(int);
 	int* h_histogramDR = (int*)malloc(histogrambytes);
 	int* h_histogramDD = (int*)malloc(histogrambytes);
 	int* h_histogramRR = (int*)malloc(histogrambytes);
@@ -296,15 +240,16 @@ int main(int argc, char *argv[])
 	
 
 	end = clock();
-	time_used = ((double) (end - start)) / CLOCKS_PER_SEC * 1000.0;
-	printf("Execution time: %.2f ms\n", time_used);
+	time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+	printf("GPU Execution time: %.2f s\n", time_used);
+	start = clock();
     
 	printf("===================== CALCULATING OMEGA =====================\n");
 	// calculate omega values on the CPU
 	// Memory management
-	size_t omegabytes = BIN_RANGE*BINS_PER_DEGREE*sizeof(float);
+	size_t omegabytes = DEGREE_RANGE*BINS_PER_DEGREE*sizeof(float);
 	float* h_omega = (float*)malloc(omegabytes);
-	for (int i=0; i<BIN_RANGE*BINS_PER_DEGREE; i++){
+	for (int i=0; i<DEGREE_RANGE*BINS_PER_DEGREE; i++){
 		float num = (float)(h_histogramDD[i] - (2*h_histogramDR[i]) + h_histogramRR[i]);
 		float den = (float)(h_histogramRR[i]);
 		if (den == 0.0f){
@@ -322,7 +267,7 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    for (int i = 0; i < BIN_RANGE*BINS_PER_DEGREE; i++) {
+    for (int i = 0; i < DEGREE_RANGE*BINS_PER_DEGREE; i++) {
         outfile << i << " " << h_omega[i] << "\n";
     }
     outfile.close();
@@ -346,14 +291,17 @@ int main(int argc, char *argv[])
 
 	printf("===================== SAVING HISTOGRAMS =====================\n");
 	// save the histogram to a file for analyzing later
-	save_histogram_to_file(h_histogramDR, BIN_RANGE * BINS_PER_DEGREE, "histogramDR.txt");
-	save_histogram_to_file(h_histogramDD, BIN_RANGE * BINS_PER_DEGREE, "histogramDD.txt");
-	save_histogram_to_file(h_histogramRR, BIN_RANGE * BINS_PER_DEGREE, "histogramRR.txt");
+	save_histogram_to_file(h_histogramDR, DEGREE_RANGE * BINS_PER_DEGREE, "histogramDR.txt");
+	save_histogram_to_file(h_histogramDD, DEGREE_RANGE * BINS_PER_DEGREE, "histogramDD.txt");
+	save_histogram_to_file(h_histogramRR, DEGREE_RANGE * BINS_PER_DEGREE, "histogramRR.txt");
 
 	printf("======================= DONE, GOODBYE! ======================\n");
 
 	// Free host memory
 	free(h_histogramDD); free(h_histogramDR); free(h_histogramRR); free(h_omega);
+	end = clock();
+	time_used = ((double) (end - start)) / CLOCKS_PER_SEC * 1000.0f;
+	printf("CPU Execution time: %.2f ms\n", time_used);
 
 	return (0);
 }
@@ -367,7 +315,7 @@ int readdata(char *argv1, char *argv2)
 
 	printf("   Assuming input data is given in arc minutes!\n");
 
-	float dpi = acos(-1.0);
+	double dpi = 3.14159265;  // TODO: maybe more precision?
 
 	infil = fopen(argv1, "r");
 	if (infil == NULL)
@@ -419,7 +367,7 @@ int readdata(char *argv1, char *argv2)
 
 		h_phiReal[i] = (float) (ra / 60.0f) * (dpi / 180.0f);
 		h_thetaReal[i] = (float) (90.0f - dec / 60.0f) * (dpi / 180.0f);
-		++i;
+		++i; 
 	}
 
 	fclose(infil);
