@@ -1,9 +1,10 @@
 # Define variables
-$runRemotely = $true  # Change this to $false to run locally
+$runRemotely = $false  # Change this to $false to run locally
+$testRun = $false
 $remoteUser = "jespande"
 $remoteHost = "dione.utu.fi"
 $localOutputDir = "./output"
-$remoteFiles = @("err.txt", "out.txt", "omega.txt", "histogramDD.txt", "histogramDR.txt", "histogramRR.txt")
+$remoteFiles = @("err.txt", "omega.out", "out.txt", "histogramDD.txt", "histogramDR.txt", "histogramRR.txt")
 
 if ($runRemotely){
     # Prompt for password securely
@@ -39,17 +40,26 @@ if ($runRemotely){
 
     # Compile galaxyCalculation.cu locally
     Write-Output "Compiling cuda program locally..."
-    & nvcc -O3 -arch=sm_70 -o galaxy galaxyCalculation.cu
+    & nvcc -O3 -arch=sm_70 -o galaxy gpuUppg.cu
 
     # Execute the compiled binary locally
     Write-Output "Executing galaxy locally..."
-    & ./galaxy data_100k_arcmin.dat flat_100k_arcmin.dat omega.out > out.txt 2> err.txt
+    if ($testRun){
+        Write-Output "Running with tests"
+        & ./galaxy .\test_data_10_45_170.dat .\test_random_data.dat omega.out > out.txt 2> err.txt
+    } else {
+        & ./galaxy data_100k_arcmin.dat flat_100k_arcmin.dat omega.out > out.txt 2> err.txt
+    }
+    
 
     # Move results to the output directory
     New-Item -ItemType Directory -Path $localOutputDir -Force | Out-Null  # Ensure local output directory exists
-    Move-Item -Path "out.txt" -Destination "$localOutputDir/"
-    Move-Item -Path "err.txt" -Destination "$localOutputDir/"
-    Move-Item -Path "omega.out" -Destination "$localOutputDir/"
+    # Move-Item -Path "out.txt" -Destination "$localOutputDir/" -Force
+    # Move-Item -Path "err.txt" -Destination "$localOutputDir/" -Force
+    # Move-Item -Path "omega.out" -Destination "$localOutputDir/" -Force
+    foreach ($file in $remoteFiles) {
+        Move-Item -Path $file -Destination "$localOutputDir/" -Force
+    }
 }
 
 # 4. Ensure required Python packages are installed

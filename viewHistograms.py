@@ -104,4 +104,4 @@ if __name__ == "__main__":
     # Plot all histograms together in a combined plot
     plot_combined_histogram(histogram_files, output_dir)
 
-    plot_omega("output/omega.txt", f"{output_dir}/omegaGram.png")
+    plot_omega("output/omega.out", f"{output_dir}/omegaGram.png")

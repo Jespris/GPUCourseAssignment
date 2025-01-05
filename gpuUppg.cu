@@ -21,10 +21,12 @@ __global__ void calculateAngle(float* ra_A, float* decl_A, float* ra_B, float* d
 	int k = tid % N;  // index of B
 	int i = (tid - k) / N;  // index of A 
 	
+	/*
 	if (i > N || k > N) {  // check that we're in bounds
 		printf("Not in bounds\n");
 		return;
 	}
+	*/
 
 	// helper variables
 	float alpha_A = ra_A[i];
@@ -33,22 +35,21 @@ __global__ void calculateAngle(float* ra_A, float* decl_A, float* ra_B, float* d
 	float delta_B = decl_B[k];
 
 	// TODO: check that we have logical values
-	// printf("Alpha A: %f, Alpha B: %f, Delta A: %f, Delta B: %f", alpha_A, alpha_B, delta_A, delta_B);
+	// printf("A1: %f, A2: %f, D1: %f, D2: %f\n", alpha_A, alpha_B, delta_A, delta_B);
 
-	float dotProduct = sin(delta_A)*sin(delta_B) + cos(delta_B)*cos(delta_B)*cos(alpha_A - alpha_B);
+	float dotProduct = sin(delta_A)*sin(delta_B) + cos(delta_A)*cos(delta_B)*cos(alpha_A - alpha_B);
 	// printf("DotProduct: %.2f\n", dotProduct);
-	if (dotProduct < 0.0f){
-		// printf("Negative dotProduct yay!\n");
-	}
-	dotProduct = fminf(1.0f, fmaxf(dotProduct, -1.0f)); // Clamp to [-1, 1] due to floating point erros
+	// dotProduct = fminf(1.0f, fmaxf(dotProduct, -1.0f)); // Clamp to [-1, 1] due to floating point erros
 
 	float theta_rad = acosf(dotProduct);  // Single precision will suffice
 	theta_deg = theta_rad * RAD_TO_DEG;
+	// printf("Theta in degrees: %.2f\n", theta_deg);
 	// Remove floating point errors by clamping to [0, 180]
-	theta_deg = fminf(180.0f, fmaxf(theta_deg, 0.0f)); 
+	theta_deg = fminf(179.999f, fmaxf(theta_deg, 0.0f)); 
 
 	// histogram time!
 	int histogramBinIndex = theta_deg * BINS_PER_DEGREE; // Get the index by multiplying the angle by bins per degree
+	// printf("Bin index for %.2f degrees: %d\n", theta_deg, histogramBinIndex);
 
 	if (histogramBinIndex >= 0 && histogramBinIndex < (DEGREE_RANGE * BINS_PER_DEGREE)){ // ensure boundary
 		// TODO: maybe change to atomicInc, but then we need to change to size_t type arrays or something
@@ -135,15 +136,13 @@ float *h_phiFake, *h_thetaFake;
 // number of simulated random galaxies
 int nrFake;
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
 	printf("==================== READING INPUT DATA =====================\n");
 	int readdata(char *argv1, char *argv2);
 	printf("==================== READING DEVICE DATA ====================\n");
 	int getDevice(int deviceNr);
 
-	if (argc != 4)
-	{
+	if (argc != 4){
 		printf("Usage: a.out real_data random_data output_data\n");
 		return (-1);
 	}
@@ -177,7 +176,8 @@ int main(int argc, char *argv[])
 
 	// allocate memory on the GPU and histogram arrays memory on CPU
 	size_t arraybytes = N * sizeof(float);
-	printf("Arraybytes: %d\n", arraybytes);
+	size_t megabytes = (size_t)round((double)arraybytes / (1024 * 1024));
+	printf("Arraybytes: %zd = %zd MB\n", arraybytes, megabytes);
 
 	size_t histogrambytes = DEGREE_RANGE * BINS_PER_DEGREE * sizeof(int);
 	int* h_histogramDR = (int*)malloc(histogrambytes);
@@ -238,7 +238,6 @@ int main(int argc, char *argv[])
 	cudaFree(d_thetaReal); cudaFree(d_phiReal); 
 	cudaFree(d_thetaFake); cudaFree(d_phiFake);
 	
-
 	end = clock();
 	time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
 	printf("GPU Execution time: %.2f s\n", time_used);
@@ -252,30 +251,10 @@ int main(int argc, char *argv[])
 	for (int i=0; i<DEGREE_RANGE*BINS_PER_DEGREE; i++){
 		float num = (float)(h_histogramDD[i] - (2*h_histogramDR[i]) + h_histogramRR[i]);
 		float den = (float)(h_histogramRR[i]);
-		if (den == 0.0f){
-			printf("Division by zero!\n");
-		} else {
+		if (den != 0.0f){
 			h_omega[i] = (float)(num/den);
 		}
 	}
-
-	// write omega values to omega.out
-	printf("=================== SAVING OMEGA VALUES =====================\n");
-	std::ofstream outfile("omega.txt");
-    if (!outfile.is_open()) {
-        printf("Error opening file %s for writing.\n", "omega.txt");
-        return 0;
-    }
-
-    for (int i = 0; i < DEGREE_RANGE*BINS_PER_DEGREE; i++) {
-        outfile << i << " " << h_omega[i] << "\n";
-    }
-    outfile.close();
-    printf("Omega values saved to %s\n", "omega.txt");
-
-	printf("====================== OMEGA SUMMARY ========================\n");
-
-	verbose_omega(h_omega);
 
 	printf("\n");
 	printf("================== SUMMARIZING HISTOGRAMS ===================\n");
@@ -288,6 +267,24 @@ int main(int argc, char *argv[])
     printf("Summary for Fake vs. Fake (RR):\n");
     verbose_histogram(h_histogramRR);
 	printf("\n");
+
+	// write omega values to omega.out
+	printf("=================== SAVING OMEGA VALUES =====================\n");
+	std::ofstream outfile("omega.out");
+    if (!outfile.is_open()) {
+        printf("Error opening file %s for writing.\n", "omega.out");
+        return 0;
+    }
+
+    for (int i = 0; i < DEGREE_RANGE*BINS_PER_DEGREE; i++) {
+        outfile << i << " " << h_omega[i] << "\n";
+    }
+    outfile.close();
+    printf("Omega values saved to %s\n", "omega.out");
+
+	printf("====================== OMEGA SUMMARY ========================\n");
+
+	verbose_omega(h_omega);
 
 	printf("===================== SAVING HISTOGRAMS =====================\n");
 	// save the histogram to a file for analyzing later
@@ -366,7 +363,7 @@ int readdata(char *argv1, char *argv2)
 		// store values as phi and theta in radians instead of right ascension and declination in arc minutes
 
 		h_phiReal[i] = (float) (ra / 60.0f) * (dpi / 180.0f);
-		h_thetaReal[i] = (float) (90.0f - dec / 60.0f) * (dpi / 180.0f);
+		h_thetaReal[i] = (float) (dec / 60.0f) * (dpi / 180.0f);
 		++i; 
 	}
 
@@ -425,7 +422,7 @@ int readdata(char *argv1, char *argv2)
 		// store values as phi and theta in radians instead of right ascension and declination in arc minutes
 
 		h_phiFake[i] = (float) (ra / 60.0f) * (dpi / 180.0f);
-		h_thetaFake[i] = (float) (90.0f - dec / 60.0f) * (dpi / 180.0f);
+		h_thetaFake[i] = (float) (dec / 60.0f) * (dpi / 180.0f);
 		++i;
 	}
 
@@ -433,8 +430,10 @@ int readdata(char *argv1, char *argv2)
 
 	if (i != nrFake)
 	{
+		
 		printf("   Cannot read %s correctly\n", argv2);
 		return (-1);
+		
 	}
 
 	return (0);
